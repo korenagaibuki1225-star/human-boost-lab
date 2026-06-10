@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Boost Lab — しずくと一緒に、毎日少しずつ</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5fbff;
+    --surface: #ffffff;
+    --sky: #38bdf8;
+    --sky-deep: #0ea5e9;
+    --sky-soft: #e0f2fe;
+    --sky-mid: #bae6fd;
+    --green: #10b981;
+    --green-soft: #ecfdf5;
+    --green-mid: #a7f3d0;
+    --orange: #fb923c;
+    --orange-deep: #f97316;
+    --orange-soft: #fff7ed;
+    --orange-mid: #fed7aa;
+    --red: #ef4444;
+    --red-soft: #fef2f2;
+    --amber: #f59e0b;
+    --amber-soft: #fffbeb;
+    --text: #1e3a52;
+    --text2: #5a7184;
+    --text3: #93a8b8;
+    --border: #e2eef7;
+    --radius: 20px;
+    --radius2: 13px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Kaku Gothic ProN', sans-serif;
+    min-height: 100vh;
+  }
+
+  .container { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+
+  /* ===== HEADER ===== */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; max-width: 920px; margin: 0 auto;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--sky-soft); display: flex; align-items: center;
+    justify-content: center; font-size: 20px;
+  }
+  .logo-text { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }
+  .logo-sub { font-size: 10px; color: var(--text3); margin-top: -1px; }
+
+  .nav { display: flex; gap: 3px; }
+  .nav-btn {
+    padding: 8px 14px; border-radius: 100px; border: none;
+    background: transparent; color: var(--text2); cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 500;
+    transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+  }
+  .nav-btn:hover { background: var(--bg); color: var(--text); }
+  .nav-btn.active { background: var(--sky-soft); color: var(--sky-deep); }
+
+  .page { display: none; padding: 24px 0 80px; }
+  .page.active { display: block; }
+
+  /* ===== SHIZUKU HERO ===== */
+  .shizuku-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 26px 28px;
+    display: flex; gap: 24px; align-items: center; margin-bottom: 16px;
+  }
+  .shizuku-stage { position: relative; flex-shrink: 0; text-align: center; }
+  .shizuku-wrap { animation: float 3.2s ease-in-out infinite; display: inline-block; }
+  .shizuku-wrap.bounce { animation: bounce 0.7s ease; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes bounce {
+    0% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-16px) scale(1.06); }
+    60% { transform: translateY(0) scale(1); }
+    80% { transform: translateY(-7px) scale(1.02); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shizuku-wrap, .shizuku-wrap.bounce { animation: none; }
+  }
+  .lv-badge {
+    display: inline-block; background: var(--sky); color: #fff;
+    font-size: 12px; font-weight: 700; padding: 3px 14px;
+    border-radius: 100px; margin-top: 4px;
+  }
+  .shizuku-talk { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  .bubble {
+    background: var(--sky-soft); border-radius: 16px;
+    padding: 12px 16px; font-size: 14px; line-height: 1.7;
+    position: relative; color: var(--text);
+  }
+  .bubble.main { font-weight: 500; }
+  .bubble.sub { background: var(--bg); font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .bubble::before {
+    content: ''; position: absolute; left: -8px; top: 18px;
+    border: 7px solid transparent; border-right: 9px solid var(--sky-soft); border-left: 0;
+  }
+  .bubble.sub::before { border-right-color: var(--bg); }
+
+  .chat-refresh {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 100px; width: 28px; height: 28px; cursor: pointer;
+    font-size: 13px; flex-shrink: 0; color: var(--text2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chat-refresh:hover { background: var(--sky-soft); }
+
+  .lv-progress { font-size: 12px; color: var(--text2); }
+  .lv-progress b { color: var(--sky-deep); font-size: 14px; }
+  .lv-bar {
+    height: 8px; background: var(--bg); border-radius: 100px;
+    overflow: hidden; margin: 6px 0 4px; border: 1px solid var(--border);
+  }
+  .lv-fill { height: 100%; background: var(--sky); border-radius: 100px; transition: width 0.6s ease; }
+
+  /* ===== MISSION ===== */
+  .mission-card {
+    background: var(--orange-soft); border: 1px solid var(--orange-mid);
+    border-radius: var(--radius); padding: 18px 22px; margin-bottom: 16px;
+  }
+  .mission-head { font-size: 12px; font-weight: 700; color: var(--orange-deep); letter-spacing: 1px; margin-bottom: 8px; }
+  .mission-body { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .mission-text { font-size: 15px; font-weight: 500; }
+  .mission-btn {
+    background: var(--orange); border: none; border-radius: 100px;
+    color: #fff; font-size: 13px; font-weight: 700; font-family: inherit;
+    padding: 9px 22px; cursor: pointer; transition: transform 0.12s, background 0.12s;
+  }
+  .mission-btn:hover { background: var(--orange-deep); transform: scale(1.04); }
+  .mission-btn.done { background: var(--green); cursor: default; transform: none; }
+  .mission-praise {
+    margin-top: 12px; background: var(--surface); border-radius: 12px;
+    padding: 10px 14px; font-size: 14px; display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ===== FORM ===== */
+  .form-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px 24px; margin-bottom: 14px;
+  }
+  .section-label {
+    font-size: 12px; font-weight: 700; color: var(--text2);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 6px;
+  }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+  .form-group { display: flex; flex-direction: column; gap: 7px; }
+  label { font-size: 13px; color: var(--text2); font-weight: 500; }
+
+  input[type="date"], input[type="password"], input[type="text"], textarea {
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: var(--radius2); padding: 10px 13px;
+    color: var(--text); font-size: 14px; font-family: inherit;
+    transition: border-color 0.12s, box-shadow 0.12s; width: 100%;
+  }
+  input:focus, textarea:focus {
+    outline: none; border-color: var(--sky);
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.15);
+  }
+  textarea { resize: none; line-height: 1.6; }
+
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  input[type="range"] {
+    flex: 1; -webkit-appearance: none; appearance: none; height: 6px;
+    background: var(--sky-soft); border-radius: 100px; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--sky); cursor: pointer;
+    border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14,165,233,0.4);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: var(--sky);
+    cursor: pointer; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14,165,233,0.4);
+  }
+  .slider-val {
+    min-width: 44px; text-align: center; font-size: 15px; font-weight: 700;
+    color: var(--sky-deep); background: var(--sky-soft);
+    border-radius: 100px; padding: 3px 8px;
+  }
+
+  .btn-primary {
+    background: var(--sky); border: none; border-radius: 100px;
+    color: #fff; font-size: 15px; font-weight: 700;
+    padding: 14px 32px; cursor: pointer; font-family: inherit;
+    width: 100%; margin-top: 6px; transition: background 0.12s, transform 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:hover { background: var(--sky-deep); transform: scale(1.01); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-secondary {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: 100px; color: var(--text2); font-size: 13px;
+    font-weight: 500; padding: 9px 20px; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px; transition: background 0.12s;
+  }
+  .btn-secondary:hover { background: var(--bg); }
+
+  .btn-danger {
+    background: var(--red-soft); border: 1.5px solid #fecaca; color: var(--red);
+    border-radius: 100px; padding: 9px 18px; cursor: pointer;
+    font-size: 13px; font-weight: 500; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-danger:hover { background: #fee2e2; }
+
+  /* ===== SCORE CARDS ===== */
+  .scores-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .score-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 22px;
+  }
+  .score-label { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 10px; }
+  .score-num { font-size: 38px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+  .score-num .denom { font-size: 15px; font-weight: 500; color: var(--text3); }
+  .score-num.sky    { color: var(--sky-deep); }
+  .score-num.green  { color: var(--green); }
+  .score-num.orange { color: var(--orange-deep); }
+  .score-num.red    { color: var(--red); }
+  .score-num.word   { font-size: 26px; letter-spacing: 0; }
+
+  .score-badge {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    padding: 4px 12px; border-radius: 100px; margin-top: 10px;
+  }
+  .badge-green  { background: var(--green-soft); color: var(--green); }
+  .badge-amber  { background: var(--amber-soft); color: var(--amber); }
+  .badge-orange { background: var(--orange-soft); color: var(--orange-deep); }
+  .badge-red    { background: var(--red-soft); color: var(--red); }
+  .badge-sky    { background: var(--sky-soft); color: var(--sky-deep); }
+
+  .score-note { margin-top: 10px; font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+  .breakdown { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-label { font-size: 11px; color: var(--text3); min-width: 48px; }
+  .bar-track { flex: 1; height: 6px; background: var(--bg); border-radius: 100px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 100px; transition: width 0.5s ease; }
+  .bar-num { font-size: 11px; color: var(--text2); min-width: 30px; text-align: right; }
+
+  /* ===== DIARY ===== */
+  .diary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px 24px; margin-bottom: 16px;
+  }
+  .diary-head { font-size: 14px; font-weight: 700; margin-bottom: 16px; }
+  .diary-flex { display: flex; gap: 16px; align-items: flex-start; }
+  .diary-avatar { flex-shrink: 0; }
+  .diary-bubbles { flex: 1; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+  .diary-hint { margin-top: 14px; font-size: 11.5px; color: var(--text3); }
+  .diary-hint button {
+    background: none; border: none; color: var(--sky-deep); cursor: pointer;
+    font-size: 11.5px; font-family: inherit; text-decoration: underline; padding: 0;
+  }
+
+  .ai-loading { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 13px; padding: 8px 0; }
+  .dot-pulse { display: flex; gap: 4px; }
+  .dot-pulse span { width: 7px; height: 7px; border-radius: 50%; background: var(--sky); animation: pulse 1.2s infinite; }
+  .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+
+  /* ===== CHARTS ===== */
+  .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .chart-title { font-size: 13px; color: var(--text2); font-weight: 700; margin-bottom: 14px; }
+
+  .result-meta { font-size: 13px; color: var(--text2); margin-bottom: 16px; font-weight: 500; }
+
+  .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+  .page-title { font-size: 22px; font-weight: 700; }
+  .page-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { border-bottom: 1.5px solid var(--border); }
+  th { color: var(--text3); font-weight: 700; padding: 10px 12px; text-align: left; font-size: 11px; white-space: nowrap; }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); color: var(--text2); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg); }
+
+  .empty { text-align: center; padding: 48px 24px; color: var(--text2); }
+  .empty .empty-shizuku { margin-bottom: 10px; }
+  .empty p { font-size: 14px; line-height: 1.7; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; z-index: 999;
+    background: var(--text); color: #fff; font-size: 13px; font-weight: 500;
+    padding: 12px 20px; border-radius: 100px;
+    display: flex; align-items: center; gap: 8px;
+    transform: translate(-50%, 70px); opacity: 0; transition: all 0.3s;
+  }
+  .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+  .info-box {
+    background: var(--sky-soft); border-radius: var(--radius2);
+    padding: 14px 16px; font-size: 13px; color: var(--text2);
+    line-height: 1.7; margin-bottom: 14px;
+  }
+  .info-box strong { color: var(--text); }
+  .info-box a { color: var(--sky-deep); }
+  .warn-box {
+    background: var(--amber-soft); border-radius: var(--radius2);
+    padding: 14px 16px; font-size: 13px; color: #92400e;
+    line-height: 1.7; margin-bottom: 14px; display: flex; gap: 8px;
+  }
+
+  .key-input-row { display: flex; gap: 8px; }
+  .key-input-row input { flex: 1; }
+  .btn-icon {
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: var(--radius2); padding: 0 14px; cursor: pointer;
+    color: var(--text2); font-size: 14px;
+  }
+  .btn-icon:hover { background: var(--sky-soft); }
+  .key-status {
+    display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+    margin-top: 10px; padding: 9px 13px; border-radius: var(--radius2);
+  }
+  .key-status.ok { background: var(--green-soft); color: var(--green); font-weight: 500; }
+  .key-status.none { background: var(--bg); color: var(--text3); }
+
+  .settings-section { margin-bottom: 26px; }
+  .settings-section-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  .divider { height: 1px; background: var(--border); margin: 22px 0; }
+
+  footer { text-align: center; padding: 0 20px 36px; font-size: 11px; color: var(--text3); line-height: 1.7; }
+
+  @media (max-width: 620px) {
+    .shizuku-card { flex-direction: column; text-align: center; padding: 22px 18px; }
+    .bubble::before { display: none; }
+    .shizuku-talk { width: 100%; }
+    .scores-grid { grid-template-columns: 1fr 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .nav-btn span { display: none; }
+    .nav-btn { padding: 8px 11px; }
+    .logo-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">💧</div>
+      <div>
+        <div class="logo-text">Human Boost Lab</div>
+        <div class="logo-sub">しずくと一緒に、毎日少しずつ成長しよう</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showPage('home')" id="nav-home">🏠 <span>ホーム</span></button>
+      <button class="nav-btn" onclick="showPage('result')" id="nav-result">📊 <span>結果</span></button>
+      <button class="nav-btn" onclick="showPage('history')" id="nav-history">📚 <span>履歴</span></button>
+      <button class="nav-btn" onclick="showPage('settings')" id="nav-settings">⚙️ <span>設定</span></button>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<div class="page active" id="page-home">
+  <div class="container">
+
+    <div class="shizuku-card">
+      <div class="shizuku-stage">
+        <div class="shizuku-wrap" id="shizuku-figure"></div>
+        <div><span class="lv-badge" id="lv-badge">Lv.1</span></div>
+      </div>
+      <div class="shizuku-talk">
+        <div class="bubble main" id="greet-bubble"></div>
+        <div class="bubble sub">
+          <span id="chat-bubble"></span>
+          <button class="chat-refresh" onclick="refreshChat()" title="ほかの話題" aria-label="ほかの話題">🔄</button>
+        </div>
+        <div class="lv-progress">
+          累計記録 <b id="total-days">0</b> 日
+          <div class="lv-bar"><div class="lv-fill" id="lv-fill" style="width:0%"></div></div>
+          <span id="lv-next-text"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mission-card">
+      <div class="mission-head">🎯 DAILY MISSION</div>
+      <div class="mission-body">
+        <span class="mission-text" id="mission-text"></span>
+        <button class="mission-btn" id="mission-btn" onclick="completeMission()">達成！</button>
+      </div>
+      <div class="mission-praise" id="mission-praise" style="display:none"></div>
+    </div>
+
+    <div class="form-card">
+      <div class="section-label">📅 基本情報</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>日付</label>
+          <input type="date" id="inp-date">
+        </div>
+        <div class="form-group">
+          <label>😴 睡眠時間（時間）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-sleep" min="0" max="12" step="0.5" value="7" oninput="updateSlider('sleep')">
+            <span class="slider-val" id="val-sleep">7.0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="section-label">🧠 心理・パフォーマンス</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>😊 気分（1〜10）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-mood" min="1" max="10" step="1" value="7" oninput="updateSlider('mood')">
+            <span class="slider-val" id="val-mood">7</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>🎯 集中度（1〜10）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-focus" min="1" max="10" step="1" value="7" oninput="updateSlider('focus')">
+            <span class="slider-val" id="val-focus">7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="section-label">🏃 活動・水分</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>📖 勉強・作業時間（時間）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-study" min="0" max="16" step="0.5" value="4" oninput="updateSlider('study')">
+            <span class="slider-val" id="val-study">4.0</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>💪 運動時間（分）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-exercise" min="0" max="180" step="5" value="30" oninput="updateSlider('exercise')">
+            <span class="slider-val" id="val-exercise">30</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>💧 水分摂取量（L）</label>
+          <div class="slider-row">
+            <input type="range" id="inp-water" min="0" max="4" step="0.1" value="1.0" oninput="updateSlider('water')">
+            <span class="slider-val" id="val-water">1.0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="section-label">📝 メモ</div>
+      <div class="form-group">
+        <label>今日の一言（任意）</label>
+        <textarea id="inp-note" rows="3" placeholder="例：午前中集中できた！"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="analyze()" id="analyze-btn">
+      💧 <span id="btn-text">しずくに今日の記録をわたす</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ RESULT ============ -->
+<div class="page" id="page-result">
+  <div class="container">
+    <div id="result-content">
+      <div class="empty">
+        <div class="empty-shizuku" id="empty-shizuku"></div>
+        <p>まだ記録がないみたい。<br>ホームから今日のコンディションを教えてな😊</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HISTORY ============ -->
+<div class="page" id="page-history">
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <div class="page-title">📚 きろくノート</div>
+        <div class="page-sub">これまでの記録一覧</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" onclick="exportCSV()">⬇️ CSV保存</button>
+        <button class="btn-danger" onclick="clearHistory()">🗑 全削除</button>
+      </div>
+    </div>
+    <div class="form-card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="history-table-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div class="page" id="page-settings">
+  <div class="container">
+    <div style="padding: 8px 0 20px;">
+      <div class="page-title">⚙️ 設定</div>
+      <div class="page-sub">APIキーとデータの管理</div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">🔑 Claude API キー</div>
+      <div class="info-box">
+        <strong>APIキーを設定すると、しずくがAIで自由におしゃべりするようになります。</strong><br>
+        未設定でも、しずくは定型コメントでちゃんとお話しします😊<br>
+        キーは <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> で取得でき、このブラウザの中（localStorage）にだけ保存されます。外部サーバーには送信されません。
+      </div>
+      <div class="warn-box">
+        <span>⚠️</span>
+        <div><strong>セキュリティについて</strong><br>APIキーは他人と共有しないでください。共有PCや公共の端末での利用は避けるのがおすすめです。</div>
+      </div>
+      <div class="form-card">
+        <div class="form-group">
+          <label>APIキーを入力</label>
+          <div class="key-input-row">
+            <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false">
+            <button class="btn-icon" onclick="toggleKeyVisibility()" id="toggle-key-btn" title="表示/非表示">👁</button>
+          </div>
+          <div class="key-status none" id="key-status">
+            <span id="key-status-text">キー未設定 — しずくは定型コメントでお話しします</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+          <button class="btn-primary" style="width:auto;margin-top:0;padding:10px 26px;font-size:13px;" onclick="saveApiKey()">💾 保存する</button>
+          <button class="btn-secondary" onclick="deleteApiKey()" id="delete-key-btn" style="display:none">🗑 削除する</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">💾 データ管理</div>
+      <div class="form-card">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.7">
+          記録データはブラウザのlocalStorageに保存されています。ブラウザのキャッシュ削除やシークレットモードでは消えるので、ときどきCSVでバックアップしておくと安心です。
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-secondary" onclick="exportCSV()">⬇️ CSVでエクスポート</button>
+          <button class="btn-danger" onclick="clearHistory()">🗑 全記録を削除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">💧 このアプリについて</div>
+      <div class="form-card">
+        <p style="font-size:13px;color:var(--text2);line-height:1.8">
+          <strong style="color:var(--text)">Human Boost Lab</strong> は、AI・心理学・データ分析を活用してコンディションを可視化する、ウェルビーイング支援アプリです。AIキャラクター「しずく」と一緒に、健康管理を義務ではなく友達との会話のような体験に変えることを目指しています。<br><br>
+          本アプリは医療診断を目的とするものではなく、日常のセルフマネジメントを支援するプロトタイプです。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Human Boost Lab — セルフマネジメント支援プロトタイプ（医療診断を目的とするものではありません）
+</footer>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+const REC_KEY = 'hbl3_records';
+const KEY_KEY = 'hbl3_api_key';
+const MIS_KEY = 'hbl3_missions';
+
+/* ===== UTIL ===== */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ===== RECORDS ===== */
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+function saveRecord(rec) {
+  const recs = getRecords();
+  const idx = recs.findIndex(r => r.date === rec.date);
+  if (idx >= 0) recs[idx] = rec; else recs.push(rec);
+  recs.sort((a,b) => a.date.localeCompare(b.date));
+  localStorage.setItem(REC_KEY, JSON.stringify(recs));
+}
+
+/* ===== API KEY ===== */
+function getApiKey() { return localStorage.getItem(KEY_KEY) || ''; }
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val) { showToast('キーを入力してね'); return; }
+  if (!val.startsWith('sk-ant-')) { showToast('Anthropicのキー（sk-ant-...）を入力してね'); return; }
+  localStorage.setItem(KEY_KEY, val);
+  updateKeyStatus();
+  showToast('APIキーを保存したよ！');
+}
+function deleteApiKey() {
+  if (!confirm('保存したAPIキーを削除しますか？')) return;
+  localStorage.removeItem(KEY_KEY);
+  document.getElementById('api-key-input').value = '';
+  updateKeyStatus();
+  showToast('APIキーを削除したよ');
+}
+function toggleKeyVisibility() {
+  const inp = document.getElementById('api-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function updateKeyStatus() {
+  const key = getApiKey();
+  const el = document.getElementById('key-status');
+  const txt = document.getElementById('key-status-text');
+  const del = document.getElementById('delete-key-btn');
+  if (key) {
+    el.className = 'key-status ok';
+    txt.textContent = '✅ APIキー設定済み — しずくがAIでおしゃべりします';
+    del.style.display = 'inline-flex';
+  } else {
+    el.className = 'key-status none';
+    txt.textContent = 'キー未設定 — しずくは定型コメントでお話しします';
+    del.style.display = 'none';
+  }
+}
+
+/* ===== SHIZUKU SVG ===== */
+function sparkle(cx, cy, r, color) {
+  return `<path d="M${cx} ${cy-r} Q${cx+r*0.25} ${cy-r*0.25} ${cx+r} ${cy} Q${cx+r*0.25} ${cy+r*0.25} ${cx} ${cy+r} Q${cx-r*0.25} ${cy+r*0.25} ${cx-r} ${cy} Q${cx-r*0.25} ${cy-r*0.25} ${cx} ${cy-r} Z" fill="${color}"/>`;
+}
+function shizukuSVG(lv, size, expr) {
+  expr = expr || 'happy';
+  const mouth = expr === 'cheer'
+    ? `<path d="M50 86 Q60 98 70 86 Q60 91 50 86 Z" fill="#155e75"/>`
+    : `<path d="M52 88 Q60 95 68 88" stroke="#155e75" stroke-width="2.6" fill="none" stroke-linecap="round"/>`;
+  let deco = '';
+  if (lv >= 2 && lv < 5) {
+    deco += `<path d="M59 25 C56 14 47 10 40 12 C46 15 52 19 56 27 Z" fill="#34d399"/>`
+          + `<path d="M61 24 C64 13 73 9 80 12 C74 14 67 18 64 26 Z" fill="#6ee7b7"/>`;
+  }
+  if (lv >= 3) deco += sparkle(17, 52, 5, '#fbbf24') + sparkle(104, 62, 4, '#fcd34d');
+  if (lv >= 4) deco += sparkle(13, 94, 4, '#fb923c') + sparkle(107, 92, 5, '#fbbf24');
+  if (lv >= 5) {
+    deco += `<path d="M45 19 L49 6 L57 13 L60 3 L63 13 L71 6 L75 19 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+  return `<svg viewBox="0 0 120 126" width="${size}" height="${Math.round(size*1.05)}" role="img" aria-label="しずく レベル${lv}">
+    <path d="M60 22 C60 22 26 58 26 84 C26 104 41 116 60 116 C79 116 94 104 94 84 C94 58 60 22 60 22 Z" fill="#7dd3fc" stroke="#38bdf8" stroke-width="2.5"/>
+    <ellipse cx="44" cy="62" rx="7" ry="12" fill="#ffffff" opacity="0.55" transform="rotate(-18 44 62)"/>
+    <circle cx="49" cy="78" r="4.2" fill="#155e75"/><circle cx="71" cy="78" r="4.2" fill="#155e75"/>
+    <circle cx="50.6" cy="76.4" r="1.4" fill="#fff"/><circle cx="72.6" cy="76.4" r="1.4" fill="#fff"/>
+    <ellipse cx="39" cy="87" rx="5.2" ry="3.2" fill="#fda4af" opacity="0.7"/>
+    <ellipse cx="81" cy="87" rx="5.2" ry="3.2" fill="#fda4af" opacity="0.7"/>
+    ${mouth}${deco}
+  </svg>`;
+}
+
+/* ===== LEVEL ===== */
+function getLevelInfo(days) {
+  const tiers = [
+    { lv: 1, min: 0,   next: 7   },
+    { lv: 2, min: 7,   next: 30  },
+    { lv: 3, min: 30,  next: 60  },
+    { lv: 4, min: 60,  next: 100 },
+    { lv: 5, min: 100, next: null }
+  ];
+  const t = tiers.filter(t => days >= t.min).pop();
+  return { ...t, days };
+}
+
+/* ===== MISSIONS ===== */
+const MISSIONS = [
+  'コップ1杯、水を飲もう！',
+  '5分だけストレッチしよう！',
+  '深呼吸を10回してみよう！',
+  '寝る30分前はスマホを置こう！',
+  '窓を開けて外の空気を吸おう！',
+  '好きな音楽を1曲聴こう！',
+  '机の上を1分だけ片付けよう！',
+  '遠くの景色を30秒ながめよう！',
+  '肩を10回まわそう！',
+  '今日よかったことを1つ思い出そう！',
+  '首をゆっくり左右にまわそう！',
+  '5分だけ散歩してみよう！'
+];
+const PRAISES = ['ナイス〜！✨', 'その調子や！🎉', 'やるやん😊', 'えらい！💮', '最高やん！🌟', 'さすがやで〜！💪'];
+const CHATS = [
+  '今日のお昼なに食べた？🍙',
+  'アイス食べたい気分や〜🍨',
+  '今日は空見た？☁️',
+  '散歩したら気持ちよさそうやね🌿',
+  '最近ハマってるものある？😊',
+  'お茶でも飲んで一息つこ〜🍵',
+  '深呼吸すると気持ちええよな〜🍃',
+  '今日もよう来てくれたなあ✨'
+];
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+function todaysMission() { return MISSIONS[hashStr(todayStr()) % MISSIONS.length]; }
+function getMissions() {
+  try { return JSON.parse(localStorage.getItem(MIS_KEY) || '{}'); } catch(e) { return {}; }
+}
+function isMissionDone() { return !!getMissions()[todayStr()]; }
+function completeMission() {
+  if (isMissionDone()) return;
+  const m = getMissions();
+  m[todayStr()] = true;
+  localStorage.setItem(MIS_KEY, JSON.stringify(m));
+  renderMission(true);
+  const fig = document.getElementById('shizuku-figure');
+  fig.classList.remove('bounce'); void fig.offsetWidth; fig.classList.add('bounce');
+}
+function renderMission(justDone) {
+  document.getElementById('mission-text').textContent = '🎯 ' + todaysMission();
+  const btn = document.getElementById('mission-btn');
+  const praise = document.getElementById('mission-praise');
+  if (isMissionDone()) {
+    btn.textContent = '✅ 達成済み';
+    btn.classList.add('done');
+    btn.disabled = false;
+    const line = justDone
+      ? PRAISES[Math.floor(Math.random() * PRAISES.length)]
+      : '今日のミッション、達成済みやで！えらい✨';
+    praise.style.display = 'flex';
+    praise.innerHTML = `<span style="font-size:18px">💧</span><span>「${escapeHtml(line)}」</span>`;
+  } else {
+    btn.textContent = '達成！';
+    btn.classList.remove('done');
+    praise.style.display = 'none';
+  }
+}
+
+/* ===== GREETING & CHAT ===== */
+function getGreeting(records) {
+  if (records.length === 0) return 'はじめまして！ぼく、しずく💧 これから毎日いっしょに、ちょっとずつ良くしていこな😊';
+  const last = records[records.length - 1].date;
+  const gap = daysBetween(last, todayStr());
+  const hasToday = records.some(r => r.date === todayStr());
+  if (gap >= 3) return 'おかえり〜😊 また会えてうれしい！今日からまた一緒にやっていこ🌱';
+  if (hasToday) return '今日も来てくれたやん😆 記録ありがとう！';
+  return 'おかえり〜！今日の調子はどう？😊';
+}
+let currentChatIdx = -1;
+function refreshChat() {
+  let idx;
+  do { idx = Math.floor(Math.random() * CHATS.length); } while (idx === currentChatIdx && CHATS.length > 1);
+  currentChatIdx = idx;
+  document.getElementById('chat-bubble').textContent = CHATS[idx];
+}
+
+/* ===== HOME RENDER ===== */
+function renderHome() {
+  const records = getRecords();
+  const info = getLevelInfo(records.length);
+  const size = 110 + info.lv * 7;
+  document.getElementById('shizuku-figure').innerHTML = shizukuSVG(info.lv, size);
+  document.getElementById('lv-badge').textContent = 'Lv.' + info.lv;
+  document.getElementById('total-days').textContent = records.length;
+  const fill = document.getElementById('lv-fill');
+  const nextText = document.getElementById('lv-next-text');
+  if (info.next === null) {
+    fill.style.width = '100%';
+    nextText.textContent = '最大レベル！いつもありがとうな😊';
+  } else {
+    const pct = Math.round(((info.days - info.min) / (info.next - info.min)) * 100);
+    fill.style.width = Math.max(pct, 4) + '%';
+    nextText.textContent = `Lv.${info.lv + 1} まであと ${info.next - info.days} 日`;
+  }
+  document.getElementById('greet-bubble').textContent = getGreeting(records);
+  if (currentChatIdx === -1) refreshChat();
+  renderMission(false);
+}
+
+/* ===== SCORES ===== */
+function calcBoostScore(d) {
+  const sleep = parseFloat(d.sleep), mood = +d.mood, focus = +d.focus,
+        ex = +d.exercise, water = parseFloat(d.water), study = parseFloat(d.study);
+  const sleepS = sleep >= 7 ? 30 : sleep >= 6 ? 22 : sleep >= 5 ? 14 : 7;
+  const moodS  = Math.round(mood / 10 * 20);
+  const focusS = Math.round(focus / 10 * 15);
+  const exS    = ex >= 30 ? 10 : ex >= 15 ? 7 : ex > 0 ? 4 : 0;
+  const waterS = water >= 1.5 ? 15 : water >= 1.0 ? 10 : water >= 0.5 ? 6 : 2;
+  const balS   = study === 0 ? 6 : study <= 8 ? 10 : study <= 10 ? 6 : 2;
+  return { total: sleepS + moodS + focusS + exS + waterS + balS,
+           sleep: sleepS, mood: moodS, focus: focusS, exercise: exS, water: waterS, balance: balS };
+}
+function calcStressScore(d) {
+  let s = 0;
+  const sleep = parseFloat(d.sleep), mood = +d.mood, focus = +d.focus,
+        study = parseFloat(d.study), ex = +d.exercise, water = parseFloat(d.water);
+  if (sleep < 5) s += 22; else if (sleep < 6) s += 16; else if (sleep < 7) s += 9;
+  if (mood <= 3) s += 22; else if (mood <= 5) s += 13; else if (mood <= 6) s += 5;
+  if (focus <= 3) s += 18; else if (focus <= 5) s += 10; else if (focus <= 6) s += 4;
+  if (study > 12) s += 18; else if (study > 10) s += 13; else if (study > 8) s += 7;
+  if (ex === 0) s += 10; else if (ex < 15) s += 5;
+  if (water < 0.8) s += 10; else if (water < 1.2) s += 5;
+  return Math.min(s, 100);
+}
+function calcBurnoutRisk(records) {
+  const recent = records.slice(-7);
+  if (recent.length < 3) return { label: 'LOW', emoji: '🟢' };
+  const avg = k => recent.reduce((s,r) => s + parseFloat(r[k]), 0) / recent.length;
+  if (avg('sleep') < 6 && avg('mood') < 5 && avg('focus') < 5) return { label: 'HIGH', emoji: '🔴' };
+  if (avg('sleep') < 6.5 || avg('mood') < 5.5 || avg('focus') < 5.5) return { label: 'MEDIUM', emoji: '🟡' };
+  return { label: 'LOW', emoji: '🟢' };
+}
+function hydrationStatus(w) {
+  if (w >= 1.5) return { emoji: '🟢', label: 'Good', color: 'green', badge: 'badge-green', msg: '水分ばっちり！ええ感じ〜💧' };
+  if (w >= 1.0) {
+    const rem = Math.round((1.5 - w) * 1000);
+    return { emoji: '🟡', label: 'Caution', color: 'orange', badge: 'badge-amber', msg: `あと${rem}mL飲んでみよう！` };
+  }
+  return { emoji: '🟠', label: 'Low', color: 'orange', badge: 'badge-orange', msg: '今日は少なめ。こまめに飲んでこ〜' };
+}
+
+/* ===== SHIZUKU DIARY (fallback) ===== */
+function shizukuDiary(d, boost, stress, burnout) {
+  const msgs = [];
+  const sleep = parseFloat(d.sleep), water = parseFloat(d.water);
+  if (sleep >= 7) msgs.push('睡眠ばっちりやん！ええ感じ〜✨');
+  else if (sleep < 6) msgs.push('昨日ちょっと夜更かしした？😂 今日は早めに休も〜');
+  if (water >= 1.5) msgs.push('水分しっかり取れてる！さすがやで💧');
+  else if (water < 1.0) msgs.push('水分ちょっと少なめかも。こまめに飲んでこ〜😊');
+  if (+d.mood >= 8) msgs.push('今日は気分ええみたいやね！ぼくもうれしい😆');
+  else if (+d.mood <= 4) msgs.push('今日は無理せんといこ🌱 ゆっくりでええんやで');
+  if (parseFloat(d.study) > 10) msgs.push('めっちゃ頑張ったんやなあ…！休憩も大事やで☕');
+  if (+d.exercise >= 30) msgs.push('運動もしっかり！体うごかすの大事よな🏃');
+  if (burnout.label === 'HIGH') msgs.push('最近ちょっとお疲れ気味かも。今日はようけ休んでな🌙');
+  if (msgs.length === 0) msgs.push('今日もええ感じのバランスやん！この調子でいこ〜😊');
+  msgs.push(boost.total >= 75 ? '今日のコンディション、かなりええで！🌟' : '明日もまた一緒に記録しよな😊');
+  return msgs.slice(0, 4);
+}
+
+/* ===== MEMORIES ===== */
+function buildMemories(records) {
+  if (records.length < 10) return null;
+  const n = Math.min(7, Math.floor(records.length / 2));
+  const recent = records.slice(-n), early = records.slice(0, n);
+  const avg = (arr, k) => arr.reduce((s,r) => s + parseFloat(r[k]), 0) / arr.length;
+  const out = [];
+  if (avg(recent,'sleep') - avg(early,'sleep') >= 0.4) out.push('前より睡眠時間が増えてきたね✨');
+  if (avg(recent,'water') - avg(early,'water') >= 0.2) out.push('最近、水分しっかり取れてるやん！💧');
+  if (avg(recent,'focus') - avg(early,'focus') >= 0.5) out.push('最初のころより集中度が上がってる😊');
+  if (avg(recent,'mood') - avg(early,'mood') >= 0.5) out.push('気分も前より安定してきた感じするで🌈');
+  if (out.length === 0) out.push(`もう累計${records.length}日も記録してるんやで！それだけですごいことや🌱`);
+  return out;
+}
+
+/* ===== AI DIARY ===== */
+async function getAIDiary(data, boost, stress, burnout) {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+  const prompt = `あなたは「しずく」という水滴のAIキャラクターです。
+
+# しずくの性格
+- 明るくてフレンドリー、少し天然
+- ユーザーの友達のような存在
+- 絶対に責めない・否定しない・命令しない
+- 関西弁を少し交える（「〜やん」「ええ感じ〜」「〜していこ」など）
+- 絵文字を適度に使う
+
+# 今日のユーザーのデータ
+- 睡眠時間: ${data.sleep}時間
+- 気分: ${data.mood}/10
+- 集中度: ${data.focus}/10
+- 勉強・作業時間: ${data.study}時間
+- 運動時間: ${data.exercise}分
+- 水分摂取量: ${data.water}L
+- メモ: ${data.note || 'なし'}
+- Human Boost Score: ${boost.total}/100
+- Stress Score: ${stress}/100
+- Burnout Risk: ${burnout.label}
+
+# 指示
+友達として話しかけるように、3〜4文の短いコメントを書いてください。
+良いところを必ず1つ以上見つけて褒めてください。
+気になる点があれば、優しく提案の形で伝えてください。
+見出しや箇条書きは使わず、話し言葉だけで書いてください。`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const json = await res.json();
+    if (json.error) { console.error('API error:', json.error.message); return null; }
+    if (json.content && json.content[0]) return json.content[0].text;
+    return null;
+  } catch(e) { console.error('Fetch error:', e); return null; }
+}
+
+/* ===== ANALYZE ===== */
+let chartInstances = {};
+
+async function analyze() {
+  const date = document.getElementById('inp-date').value;
+  if (!date) { showToast('日付を入れてね'); return; }
+
+  const data = {
+    date,
+    sleep:    parseFloat(document.getElementById('inp-sleep').value),
+    mood:     parseInt(document.getElementById('inp-mood').value),
+    focus:    parseInt(document.getElementById('inp-focus').value),
+    study:    parseFloat(document.getElementById('inp-study').value),
+    exercise: parseInt(document.getElementById('inp-exercise').value),
+    water:    parseFloat(document.getElementById('inp-water').value),
+    note:     document.getElementById('inp-note').value.trim()
+  };
+
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  document.getElementById('btn-text').textContent = 'しずくが分析中...';
+
+  const boost = calcBoostScore(data);
+  const stress = calcStressScore(data);
+  saveRecord({ ...data, boostScore: boost.total, stressScore: stress });
+
+  const records = getRecords();
+  const burnout = calcBurnoutRisk(records);
+
+  showPage('result');
+  renderResult(data, boost, stress, burnout, records);
+
+  const bubbles = document.getElementById('diary-bubbles');
+  if (getApiKey()) {
+    bubbles.innerHTML = `<div class="ai-loading"><div class="dot-pulse"><span></span><span></span><span></span></div> しずくが考え中...</div>`;
+    const text = await getAIDiary(data, boost, stress, burnout);
+    if (text) {
+      const parts = text.split(/\n+/).filter(t => t.trim()).slice(0, 3);
+      bubbles.innerHTML = parts.map(p => `<div class="bubble">${escapeHtml(p)}</div>`).join('');
+    } else {
+      bubbles.innerHTML = shizukuDiary(data, boost, stress, burnout).map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
+      showToast('AI接続に失敗したので定型コメントを表示してるよ');
+    }
+  } else {
+    bubbles.innerHTML = shizukuDiary(data, boost, stress, burnout).map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
+  }
+
+  renderCharts(records);
+  renderHome();
+
+  btn.disabled = false;
+  document.getElementById('btn-text').textContent = 'しずくに今日の記録をわたす';
+  showToast('記録を保存したよ💧');
+}
+
+/* ===== RENDER RESULT ===== */
+function renderResult(data, boost, stress, burnout, records) {
+  const boostCls   = boost.total >= 75 ? 'sky' : boost.total >= 50 ? 'orange' : 'red';
+  const boostBadge = boost.total >= 75 ? 'badge-sky' : boost.total >= 50 ? 'badge-amber' : 'badge-red';
+  const boostWord  = boost.total >= 75 ? '好調！' : boost.total >= 50 ? 'まずまず' : 'おやすみ推奨';
+  const stressCls   = stress <= 30 ? 'green' : stress <= 60 ? 'orange' : 'red';
+  const stressBadge = stress <= 30 ? 'badge-green' : stress <= 60 ? 'badge-amber' : 'badge-red';
+  const stressWord  = stress <= 30 ? 'リラックス' : stress <= 60 ? 'やや注意' : '高ストレス';
+  const bCls   = burnout.label === 'LOW' ? 'green' : burnout.label === 'MEDIUM' ? 'orange' : 'red';
+  const bBadge = burnout.label === 'LOW' ? 'badge-green' : burnout.label === 'MEDIUM' ? 'badge-amber' : 'badge-red';
+  const bNote  = burnout.label === 'HIGH'   ? '最近おつかれ気味。今日はゆっくり休も🌙'
+               : burnout.label === 'MEDIUM' ? 'ちょっと疲れがたまってるかも。無理せんとこ'
+               : 'ええ調子をキープできてるで！';
+  const hyd = hydrationStatus(parseFloat(data.water));
+
+  const bars = [
+    ['睡眠',    boost.sleep,    30, '#38bdf8'],
+    ['気分',    boost.mood,     20, '#fb923c'],
+    ['集中',    boost.focus,    15, '#10b981'],
+    ['運動',    boost.exercise, 10, '#a78bfa'],
+    ['水分',    boost.water,    15, '#0ea5e9'],
+    ['バランス', boost.balance,  10, '#f59e0b']
+  ].map(([label, val, max, color]) =>
+    `<div class="bar-row"><span class="bar-label">${label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%;background:${color}"></div></div><span class="bar-num">${val}pt</span></div>`
+  ).join('');
+
+  const memories = buildMemories(records);
+  const lvInfo = getLevelInfo(records.length);
+
+  document.getElementById('result-content').innerHTML = `
+    <div class="result-meta">📅 ${data.date} の記録</div>
+
+    <div class="scores-grid">
+      <div class="score-card">
+        <div class="score-label">🌟 Human Boost Score</div>
+        <div class="score-num ${boostCls}">${boost.total}<span class="denom"> / 100</span></div>
+        <div class="breakdown">${bars}</div>
+        <span class="score-badge ${boostBadge}">${boostWord}</span>
+      </div>
+      <div class="score-card">
+        <div class="score-label">😌 Stress Score</div>
+        <div class="score-num ${stressCls}">${stress}<span class="denom"> / 100</span></div>
+        <div class="breakdown" style="margin-top:14px">
+          <div class="bar-row"><span class="bar-label">レベル</span><div class="bar-track"><div class="bar-fill" style="width:${stress}%;background:${stress<=30?'#10b981':stress<=60?'#f59e0b':'#ef4444'}"></div></div></div>
+        </div>
+        <span class="score-badge ${stressBadge}">${stressWord}</span>
+      </div>
+      <div class="score-card">
+        <div class="score-label">🔥 Burnout Risk（7日間）</div>
+        <div class="score-num ${bCls} word">${burnout.emoji} ${burnout.label}</div>
+        <div class="score-note">${bNote}</div>
+        <span class="score-badge ${bBadge}">${burnout.label}</span>
+      </div>
+      <div class="score-card">
+        <div class="score-label">💧 Today's Hydration</div>
+        <div class="score-num ${hyd.color} word">${hyd.emoji} ${hyd.label}</div>
+        <div class="score-num" style="font-size:22px;margin-top:6px;color:var(--text)">${parseFloat(data.water).toFixed(1)}<span class="denom"> L</span></div>
+        <div class="score-note">${hyd.msg}</div>
+        <span class="score-badge ${hyd.badge}">${hyd.label}</span>
+      </div>
+    </div>
+
+    <div class="diary-card">
+      <div class="diary-head">💧 しずく日記</div>
+      <div class="diary-flex">
+        <div class="diary-avatar">${shizukuSVG(lvInfo.lv, 76)}</div>
+        <div class="diary-bubbles" id="diary-bubbles"></div>
+      </div>
+      <div class="diary-hint" id="diary-hint">${getApiKey() ? '' : '⚙️ 設定でAPIキーを入れると、しずくがAIでもっと自由におしゃべりするよ → <button onclick="showPage(\'settings\')">設定へ</button>'}</div>
+    </div>
+
+    ${memories ? `
+    <div class="diary-card">
+      <div class="diary-head">📖 しずくの思い出アルバム</div>
+      <div class="diary-flex">
+        <div class="diary-avatar">${shizukuSVG(lvInfo.lv, 64)}</div>
+        <div class="diary-bubbles">${memories.map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('')}</div>
+      </div>
+    </div>` : ''}
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">😴 睡眠時間のうつりかわり</div>
+        <div style="position:relative;height:170px"><canvas id="chart-sleep" role="img" aria-label="睡眠時間の推移グラフ">睡眠時間の記録</canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">😊 気分・🎯 集中度のうつりかわり</div>
+        <div style="position:relative;height:170px"><canvas id="chart-mood" role="img" aria-label="気分と集中度の推移グラフ">気分・集中度の記録</canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">💧 水分摂取量のうつりかわり</div>
+        <div style="position:relative;height:170px"><canvas id="chart-water" role="img" aria-label="水分摂取量の推移グラフ">水分摂取量の記録</canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">😴 睡眠 × 🎯 集中度</div>
+        <div style="position:relative;height:170px"><canvas id="chart-scatter" role="img" aria-label="睡眠時間と集中度の散布図">散布図の記録</canvas></div>
+      </div>
+    </div>
+  `;
+}
+
+/* ===== CHARTS ===== */
+function renderCharts(records) {
+  const labels = records.map(r => r.date.slice(5));
+  const gridColor = '#eef5fa', tickColor = '#93a8b8';
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 }, maxTicksLimit: 7 } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } }
+    }
+  };
+  Object.values(chartInstances).forEach(c => { try { c.destroy(); } catch(e) {} });
+  chartInstances = {};
+
+  chartInstances.sleep = new Chart(document.getElementById('chart-sleep'), {
+    type: 'line',
+    data: { labels, datasets: [{
+      data: records.map(r => parseFloat(r.sleep)),
+      borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',
+      fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#38bdf8', pointStyle: 'circle'
+    }]},
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, min: 0, max: 12 } } }
+  });
+
+  chartInstances.mood = new Chart(document.getElementById('chart-mood'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: '気分', data: records.map(r => +r.mood),  borderColor: '#fb923c', pointBackgroundColor: '#fb923c', tension: 0.4, pointRadius: 3, borderDash: [],    pointStyle: 'circle',  fill: false },
+      { label: '集中', data: records.map(r => +r.focus), borderColor: '#10b981', pointBackgroundColor: '#10b981', tension: 0.4, pointRadius: 3, borderDash: [5,3], pointStyle: 'rectRot', fill: false }
+    ]},
+    options: {
+      ...baseOpts,
+      plugins: { legend: { display: true, labels: { color: tickColor, font: { size: 10 }, usePointStyle: true, boxWidth: 8 } } },
+      scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, min: 1, max: 10 } }
+    }
+  });
+
+  chartInstances.water = new Chart(document.getElementById('chart-water'), {
+    data: { labels, datasets: [
+      { type: 'bar',  label: '水分', data: records.map(r => parseFloat(r.water || 0)), backgroundColor: 'rgba(14,165,233,0.55)', borderRadius: 6, borderSkipped: false },
+      { type: 'line', label: '目標 1.5L', data: records.map(() => 1.5), borderColor: '#93a8b8', borderDash: [6,4], pointRadius: 0, fill: false }
+    ]},
+    options: {
+      ...baseOpts,
+      plugins: { legend: { display: true, labels: { color: tickColor, font: { size: 10 }, usePointStyle: true, boxWidth: 8 } } },
+      scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, min: 0, max: 4 } }
+    }
+  });
+
+  chartInstances.scatter = new Chart(document.getElementById('chart-scatter'), {
+    type: 'scatter',
+    data: { datasets: [{
+      data: records.map(r => ({ x: parseFloat(r.sleep), y: +r.focus })),
+      backgroundColor: 'rgba(14,165,233,0.55)', pointRadius: 5, pointStyle: 'circle'
+    }]},
+    options: { ...baseOpts, scales: {
+      x: { ...baseOpts.scales.x, min: 0, max: 13, title: { display: true, text: '睡眠時間(h)', color: tickColor, font: { size: 10 } } },
+      y: { ...baseOpts.scales.y, min: 0, max: 11, title: { display: true, text: '集中度', color: tickColor, font: { size: 10 } } }
+    }}
+  });
+}
+
+/* ===== HISTORY ===== */
+function renderHistory() {
+  const records = getRecords();
+  const wrap = document.getElementById('history-table-wrap');
+  if (records.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-shizuku">${shizukuSVG(1, 72)}</div><p>まだ記録がないみたい。<br>ホームから今日の記録をつけてみよ😊</p></div>`;
+    return;
+  }
+  const rows = records.slice().reverse().map(r => {
+    const b = r.boostScore !== undefined ? r.boostScore : calcBoostScore(r).total;
+    const s = r.stressScore !== undefined ? r.stressScore : calcStressScore(r);
+    const bS = b >= 75 ? 'color:#0ea5e9;font-weight:700' : b >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
+    const sS = s <= 30 ? 'color:#10b981;font-weight:700' : s <= 60 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
+    return `<tr>
+      <td style="color:var(--text);font-weight:500">${r.date}</td>
+      <td>${r.sleep}h</td><td>${r.mood}/10</td><td>${r.focus}/10</td>
+      <td>${r.study}h</td><td>${r.exercise}分</td><td>${parseFloat(r.water || 0).toFixed(1)}L</td>
+      <td style="${bS}">${b}</td><td style="${sS}">${s}</td>
+      <td style="color:var(--text3);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.note || '—')}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr>
+    <th>日付</th><th>😴 睡眠</th><th>😊 気分</th><th>🎯 集中</th><th>📖 作業</th><th>💪 運動</th><th>💧 水分</th><th>🌟 Boost</th><th>😌 Stress</th><th>📝 メモ</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ===== CSV ===== */
+function exportCSV() {
+  const records = getRecords();
+  if (records.length === 0) { showToast('まだ記録がないみたい'); return; }
+  const header = 'date,sleep,mood,focus,study,exercise,water,note,boostScore,stressScore';
+  const rows = records.map(r =>
+    [r.date, r.sleep, r.mood, r.focus, r.study, r.exercise, r.water,
+     `"${(r.note || '').replace(/"/g, '""')}"`,
+     r.boostScore !== undefined ? r.boostScore : calcBoostScore(r).total,
+     r.stressScore !== undefined ? r.stressScore : calcStressScore(r)
+    ].join(',')
+  );
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `human-boost-lab-${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSVをダウンロードしたよ⬇️');
+}
+
+function clearHistory() {
+  if (!confirm('全ての記録を削除しますか？（しずくのレベルもリセットされます）')) return;
+  localStorage.removeItem(REC_KEY);
+  localStorage.removeItem(MIS_KEY);
+  renderHistory();
+  renderHome();
+  showToast('記録を削除したよ');
+}
+
+/* ===== NAV / MISC ===== */
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'history') renderHistory();
+  if (name === 'settings') { const k = getApiKey(); if (k) document.getElementById('api-key-input').value = k; updateKeyStatus(); }
+  window.scrollTo({ top: 0 });
+}
+function updateSlider(key) {
+  const v = parseFloat(document.getElementById('inp-' + key).value);
+  document.getElementById('val-' + key).textContent =
+    (key === 'sleep' || key === 'study' || key === 'water') ? v.toFixed(1) : Math.round(v);
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ===== INIT ===== */
+window.onload = () => {
+  document.getElementById('inp-date').value = todayStr();
+  document.getElementById('empty-shizuku').innerHTML = shizukuSVG(1, 80);
+  renderHome();
+  updateKeyStatus();
+  const records = getRecords();
+  if (records.length > 0) {
+    const last = records[records.length - 1];
+    const boost = calcBoostScore(last);
+    const stress = last.stressScore !== undefined ? last.stressScore : calcStressScore(last);
+    const burnout = calcBurnoutRisk(records);
+    renderResult(last, boost, stress, burnout, records);
+    document.getElementById('diary-bubbles').innerHTML =
+      `<div class="bubble">これは前回（${last.date}）の記録やで。今日の記録もホームから教えてな😊</div>`;
+    renderCharts(records);
+  }
+};
+</script>
+</body>
+</html>
