@@ -437,6 +437,12 @@
   }
   .insight-bubble { background: #fff; border: 1px solid #e6ebf7; }
   .insight-bubble .ins-ic { margin-right: 7px; }
+  .insight-advice { background: #fff; border: 1px solid #e6ebf7; }
+  .insight-evidence { margin-top: 14px; padding-top: 13px; border-top: 1px dashed #d4ddfa; }
+  .insight-ev-label { font-size: 11px; font-weight: 700; color: #6366f1; letter-spacing: 1px; margin-bottom: 8px; }
+  .insight-ev { font-size: 12.5px; color: var(--ink2); line-height: 1.6; margin-bottom: 6px; }
+  .insight-ev:last-child { margin-bottom: 0; }
+  .insight-ev .ins-ic { margin-right: 6px; }
   .insight-note { color: var(--ink3); font-size: 11px; line-height: 1.6; }
   .wk-card { grid-column: span 2; }
   .wk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; margin-top: 4px; }
@@ -1254,19 +1260,47 @@ function getMissions() {
   try { return JSON.parse(localStorage.getItem(MIS_KEY) || '{}'); } catch(e) { return {}; }
 }
 function isMissionDone() { return !!getMissions()[todayStr()]; }
+function missionCount(){ return Object.keys(getMissions()).length; }
+// 経験値（XP）＝ 記録した日数 ＋ ミッション達成回数
+function getXp(){ return getRecords().length + missionCount(); }
+// LVバッジ・進捗バーを現在のXPで更新する（ホーム表示中に呼ぶ）
+function updateLevelUI(){
+  const info = getLevelInfo(getXp());
+  heroLv = info.lv;
+  const badge = document.getElementById('lv-badge');
+  const total = document.getElementById('total-days');
+  const fill = document.getElementById('lv-fill');
+  const nextText = document.getElementById('lv-next-text');
+  if (badge) badge.textContent = 'LV.' + info.lv;
+  if (total) total.textContent = getRecords().length;
+  if (fill && nextText) {
+    if (info.next === null) {
+      fill.style.width = '100%';
+      nextText.textContent = '最大レベル！いつもありがとう😊';
+    } else {
+      const pct = Math.round(((info.days - info.min) / (info.next - info.min)) * 100);
+      fill.style.width = Math.max(pct, 4) + '%';
+      nextText.textContent = `LV.${info.lv + 1} まであと ${info.next - info.days} pt（記録＋ミッションで貯まる）`;
+    }
+  }
+  return info;
+}
 function completeMission() {
   if (isMissionDone()) return;
+  const beforeLv = getLevelInfo(getXp()).lv;       // ミッション加算前のLV
   const m = getMissions();
   m[todayStr()] = true;
   localStorage.setItem(MIS_KEY, JSON.stringify(m));
   renderMission(true);
-  burstConfetti(30);
+  const afterLv = updateLevelUI().lv;              // XP加算後にバッジ・バーを更新
+  burstConfetti(afterLv > beforeLv ? 60 : 30);
   const fig = document.getElementById('shizuku-figure');
   fig.classList.remove('bounce'); void fig.offsetWidth; fig.classList.add('bounce');
   // しずくが一緒に喜ぶ → 3.5秒後にもとの表情へ
   const prev = heroExpr;
   setHeroFace('cheer');
   setTimeout(() => setHeroFace(prev), 3500);
+  if (afterLv > beforeLv) showToast(`ミッション達成で LV.${afterLv} に成長したよ！おめでとう🎉`);
 }
 function renderMission(justDone) {
   document.getElementById('mission-text').textContent = todaysMission();
@@ -1404,7 +1438,7 @@ function updateReaction() {
 /* ===== HOME RENDER ===== */
 function renderHome() {
   const records = getRecords();
-  const info = getLevelInfo(records.length);
+  const info = getLevelInfo(getXp());
   heroLv = info.lv;
   const greet = getGreeting(records);
   const faceSize = 132 + info.lv * 4;
@@ -1414,18 +1448,7 @@ function renderHome() {
        <div class="minamo-drop">${shizukuSVG(info.lv, 42, greet.expr)}</div>
      </div>`;
   heroExpr = greet.expr;
-  document.getElementById('lv-badge').textContent = 'LV.' + info.lv;
-  document.getElementById('total-days').textContent = records.length;
-  const fill = document.getElementById('lv-fill');
-  const nextText = document.getElementById('lv-next-text');
-  if (info.next === null) {
-    fill.style.width = '100%';
-    nextText.textContent = '最大レベル！いつもありがとうな😊';
-  } else {
-    const pct = Math.round(((info.days - info.min) / (info.next - info.min)) * 100);
-    fill.style.width = Math.max(pct, 4) + '%';
-    nextText.textContent = `LV.${info.lv + 1} まであと ${info.next - info.days} 日`;
-  }
+  updateLevelUI();
   document.getElementById('greet-bubble').textContent = greet.msg;
   if (!document.getElementById('chat-bubble').innerHTML) refreshChat();
   renderMission(false);
@@ -1479,20 +1502,23 @@ function hydrationStatus(w) {
 
 /* ===== SHIZUKU DIARY (fallback) ===== */
 function shizukuDiary(d, boost, stress, burnout) {
-  const msgs = [];
+  const parts = [];
   const sleep = parseFloat(d.sleep), water = parseFloat(d.water);
-  if (sleep >= 7) msgs.push('睡眠しっかりとれているね、すばらしい✨ 体も心もよく回復できているよ。');
-  else if (sleep < 6) msgs.push('少し睡眠が足りていないみたい。今日は早めに休んで、明日にそなえようね😊');
-  if (water >= 1.5) msgs.push('水分もしっかりとれているね💧 体のめぐりが良くなるよ。');
-  else if (water < 1.0) msgs.push('水分が少し少なめかな。こまめに飲むと集中力も保ちやすくなるよ😊');
-  if (+d.mood >= 8) msgs.push('今日は気分が良いみたいだね！わたしもうれしいよ😆 こういう日は新しいことに挑戦するのもおすすめ。');
-  else if (+d.mood <= 4) msgs.push('今日は少し気分が沈み気味かな。無理はしないで、ゆっくりで大丈夫だよ🌱');
-  if (parseFloat(d.study) > 10) msgs.push('とても頑張ったんだね…！がんばり屋さんだからこそ、休憩もちゃんととってあげてね☕');
-  if (+d.exercise >= 30) msgs.push('運動もできているね、えらい！体を動かすと気分もスッキリするよ🏃');
-  if (burnout.label === 'HIGH') msgs.push('最近少しお疲れ気味みたい。今日はいつもより多めに休んで、自分をいたわってあげてね🌙');
-  if (msgs.length === 0) msgs.push('今日はバランスのとれた一日だね！この調子で続けていこう😊');
-  msgs.push(boost.total >= 75 ? '今日のコンディション、とても良いよ！この感覚を覚えておこうね🌟' : '明日もまた一緒に記録していこうね😊 待ってるよ。');
-  return msgs.slice(0, 4);
+  if (sleep >= 7) parts.push('睡眠をしっかりとれていて、体も心もよく回復できているみたい');
+  else if (sleep < 6) parts.push('睡眠が少し足りていないみたいだから、今日は早めに休んで明日にそなえてね');
+  if (+d.mood >= 8) parts.push('気分も良さそうで、わたしまでうれしくなっちゃう');
+  else if (+d.mood <= 4) parts.push('気分は少し沈み気味かもしれないけど、無理はしないで、ゆっくりで大丈夫だよ');
+  if (water >= 1.5) parts.push('水分もちゃんととれているね');
+  else if (water < 1.0) parts.push('水分が少なめだから、こまめに飲むことを意識してみてね');
+  if (parseFloat(d.study) > 10) parts.push('今日はとても頑張ったから、休憩もしっかりとってあげて');
+  if (+d.exercise >= 30) parts.push('運動もできていて、えらいなぁって思うよ');
+  if (burnout.label === 'HIGH') parts.push('最近お疲れ気味みたいだから、いつもより多めに自分をいたわってね');
+  const body = parts.length ? parts.slice(0, 3).join('。') + '。'
+                            : '今日はバランスのとれた一日だね。この調子で、自分のペースを大事にしていこう。';
+  const closer = boost.total >= 75
+    ? '今日のコンディション、とても良いよ。この感覚を覚えておこうね🌟'
+    : '明日もまた一緒に記録していこうね、待ってるよ😊';
+  return body + closer;
 }
 
 /* ===== INSIGHTS（ミナモの気づき＝傾向分析）===== */
@@ -1530,7 +1556,10 @@ function buildInsights(records){
       const diff=_mean(hi)-_mean(lo);
       if (Math.abs(diff)>=0.7){
         cand.push({ strength:Math.abs(diff), dkey:[dk,ok].sort().join('|'), icon:ic,
-          msg:`${dl}が${(Math.round(mid*10)/10)}${du}以上の日は、${ol}が平均で ${_sgn(diff)} ${diff>=0?'高め':'低め'}だったよ（${hi.length}日 vs ${lo.length}日）。` });
+          msg:`${dl}が${(Math.round(mid*10)/10)}${du}以上の日は、${ol}が平均で ${_sgn(diff)} ${diff>=0?'高め':'低め'}だったよ（${hi.length}日 vs ${lo.length}日）。`,
+          adv: diff>=0
+            ? `${dl}がとれている日ほど${ol}が良いみたいだから、まずは${dk==='sleep'?'夜の睡眠時間':'こまめな水分補給'}を少し意識してみると、調子が安定しやすくなりそうだよ😊`
+            : `${dl}と${ol}は、今の記録だとはっきりした関係は出ていないみたい。ほかの要因も影響してそうだから、気楽にいこうね😊` });
       }
     }
   }
@@ -1543,7 +1572,10 @@ function buildInsights(records){
       const diff=_mean(yes)-_mean(no);
       if (Math.abs(diff)>=0.7){
         cand.push({ strength:Math.abs(diff), dkey:['exercise',ok].sort().join('|'), icon:'🏃',
-          msg:`運動した日は、しなかった日より${ol}が平均で ${_sgn(diff)} ${diff>=0?'高い':'低い'}みたい（運動あり${yes.length}日／なし${no.length}日）。` });
+          msg:`運動した日は、しなかった日より${ol}が平均で ${_sgn(diff)} ${diff>=0?'高い':'低い'}みたい（運動あり${yes.length}日／なし${no.length}日）。`,
+          adv: diff>=0
+            ? `運動した日は${ol}が上がりやすいみたい。気持ちが乗らない時ほど、5分でもいいから体を動かしてみると効くかもしれないね🏃`
+            : `運動と${ol}の関係は今ははっきりしないけど、体を動かすこと自体はいい気分転換になるよ。無理のない範囲でね😊` });
       }
     }
   }
@@ -1556,7 +1588,10 @@ function buildInsights(records){
       const diff=_mean(late.map(r=>parseFloat(r[k])))-_mean(early.map(r=>parseFloat(r[k])));
       if (Math.abs(diff)>=thr){
         cand.push({ strength:Math.abs(diff), dkey:'trend|'+k, icon: diff>=0?'📈':'📉',
-          msg:`最近は、${l}が記録の前半より平均 ${_sgn(diff)}${unit} ${diff>=0?'上向きだよ':'下向き気味かな'}。` });
+          msg:`最近は、${l}が記録の前半より平均 ${_sgn(diff)}${unit} ${diff>=0?'上向きだよ':'下向き気味かな'}。`,
+          adv: diff>=0
+            ? `${l}が上向きなのは、今の生活リズムがあなたに合っているサインだよ。この調子を大事にしていこうね📈`
+            : `${l}が少し下がり気味かも。がんばりすぎていないか、いちど立ち止まって、ゆっくり休む日をつくってみてね🌱` });
       }
     }
   }
@@ -1571,13 +1606,17 @@ function buildInsights(records){
     }
     if (best){
       cand.push({ strength:1.0+Math.abs(best.r)*2, dkey:[best.ak,best.bk].sort().join('|'), icon:'📊',
-        msg:`${best.al}と${best.bl}には ${best.r>=0?'プラス':'マイナス'}の関係が見えるよ（相関 ${_sgn(best.r,2)}）。${Math.abs(best.r)>=0.6?'けっこうはっきりした':'ゆるやかな'}傾向だね。` });
+        msg:`${best.al}と${best.bl}には ${best.r>=0?'プラス':'マイナス'}の関係が見えるよ（相関 ${_sgn(best.r,2)}）。${Math.abs(best.r)>=0.6?'けっこうはっきりした':'ゆるやかな'}傾向だね。`,
+        adv: best.r>=0
+          ? `${best.al}と${best.bl}は連動して動くみたい。${best.bl}を上げたい時は、まず${best.al}を整えるのが近道かもしれないね🌙`
+          : `${best.al}が増えると${best.bl}が下がりやすいみたい。${best.al}が多い日は、意識して休憩をはさんでみてね🌱` });
     }
   }
 
   // 5) ベースライン（必ず作れる・弱め）
   cand.push({ strength:0.3, dkey:'base', icon:'🧭',
-    msg:`これまで${records.length}日分の平均は、睡眠${_mean(col('sleep')).toFixed(1)}時間・気分${_mean(col('mood')).toFixed(1)}/10・集中${_mean(col('focus')).toFixed(1)}/10だよ。` });
+    msg:`これまで${records.length}日分の平均は、睡眠${_mean(col('sleep')).toFixed(1)}時間・気分${_mean(col('mood')).toFixed(1)}/10・集中${_mean(col('focus')).toFixed(1)}/10だよ。`,
+    adv:`まずは記録を続けることが、自分のリズムを知る第一歩だよ。データがたまるほど、ミナモももっと具体的なアドバイスができるからね😊` });
 
   // 強い順 → 同じ変数ペアは1つだけ → 上位3つ
   cand.sort((a,b)=>b.strength-a.strength);
@@ -1587,7 +1626,7 @@ function buildInsights(records){
     seen.add(c.dkey); items.push(c);
     if (items.length>=3) break;
   }
-  return { ready:true, items, n:records.length };
+  return { ready:true, items, advice: (items[0] && items[0].adv) || '', n:records.length };
 }
 
 // 直近7日間のサマリー（前週比つき）
@@ -1605,16 +1644,29 @@ function buildWeekly(records){
 }
 
 /* ===== MEMORIES ===== */
+function fmtDateJa(ds){ const p = String(ds).split('-'); return p.length===3 ? `${+p[1]}月${+p[2]}日` : ds; }
 function buildMemories(records) {
   if (records.length < 10) return null;
   const n = Math.min(7, Math.floor(records.length / 2));
   const recent = records.slice(-n), early = records.slice(0, n);
   const avg = (arr, k) => arr.reduce((s,r) => s + parseFloat(r[k]), 0) / arr.length;
-  const out = [];
-  if (avg(recent,'sleep') - avg(early,'sleep') >= 0.4) out.push('最初のころより睡眠時間が増えてきたね✨ いい変化だよ。');
-  if (avg(recent,'water') - avg(early,'water') >= 0.2) out.push('最近、水分がしっかりとれているね💧 続けられているのがすごいよ。');
-  if (avg(recent,'focus') - avg(early,'focus') >= 0.5) out.push('はじめたころより集中度が上がってきているよ😊 努力のあらわれだね。');
-  if (avg(recent,'mood') - avg(early,'mood') >= 0.5) out.push('気分も前より安定してきた感じがするよ🌈');
+  const growth = [];
+  if (avg(recent,'sleep') - avg(early,'sleep') >= 0.4) growth.push('最初のころより睡眠時間が増えてきたね✨ いい変化だよ。');
+  if (avg(recent,'water') - avg(early,'water') >= 0.2) growth.push('最近、水分がしっかりとれているね💧 続けられているのがすごいよ。');
+  if (avg(recent,'focus') - avg(early,'focus') >= 0.5) growth.push('はじめたころより集中度が上がってきているよ😊 努力のあらわれだね。');
+  if (avg(recent,'mood') - avg(early,'mood') >= 0.5) growth.push('気分も前より安定してきた感じがするよ🌈');
+  const out = growth.slice(0, 2);
+  // 過去に書いた「今日の一言」をやさしく振り返る
+  const pastNotes = records.slice(0, -1).filter(r => r.note && r.note.trim());
+  if (pastNotes.length) {
+    const picks = [pastNotes[0]];                       // いちばん最初の一言
+    if (pastNotes.length > 1 && pastNotes[pastNotes.length - 1] !== pastNotes[0]) {
+      picks.push(pastNotes[pastNotes.length - 1]);      // わりと最近の一言
+    }
+    picks.slice(0, 2).forEach(r =>
+      out.push(`${fmtDateJa(r.date)}は『${r.note.trim()}』って書いてたね。こんな日もあったなぁって、わたしも思い出したよ😊`)
+    );
+  }
   if (out.length === 0) out.push(`もう累計${records.length}日も記録できているね！それだけでも本当にすごいことだよ🌱`);
   return out;
 }
@@ -1645,10 +1697,9 @@ async function getAIDiary(data, boost, stress, burnout) {
 - Burnout Risk: ${burnout.label}
 
 # 指示
-ミナモがユーザーに語りかけるように、3〜4文の短いコメントを書いてください。
-良いところを必ず1つ以上見つけて褒めてください。
-気になる点があれば、優しく提案の形で伝えてください。
-可能であれば、健康やメンタルに関するちょっとしたお役立ち豆知識を1つ添えてください。
+ミナモがユーザーにやさしく語りかけるように、ひとつの自然な文章で日記コメントを書いてください（2〜4文くらい、少し長くなってもOKです）。
+箇条書きや改行で区切らず、ひとつの段落として、流れるように書いてください。
+良いところを必ず1つ以上見つけて自然に褒め、気になる点があれば優しく提案の形でそっと添えてください。
 見出しや箇条書きは使わず、ミナモの話し言葉だけで書いてください。`;
   try {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
@@ -1679,7 +1730,7 @@ function loadDemoData() {
   if (existing.length > 0 && !confirm('デモデータ（2週間分のサンプル記録）を追加します。同じ日付の記録は上書きされますが、よろしいですか？')) return;
   const notes = ['朝から集中できた','ゼミの準備をがんばった','ちょっと夜更かしした…','散歩したら気分すっきり','課題ラッシュでつかれた','友達とカフェで勉強','早起きできた','新しいことを勉強中','資格の勉強すすんだ','よく寝たら絶好調','運動したらよく眠れた','スライド作りに集中','水こまめに飲んでみた','いい一日だった'];
   const exOptions = [0, 10, 15, 20, 30, 30, 45];
-  const prevLv = getLevelInfo(existing.length).lv;
+  const prevLv = getLevelInfo(getXp()).lv;
   for (let i = 13; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
     const t = (13 - i) / 13;
@@ -1696,7 +1747,7 @@ function loadDemoData() {
     saveRecord(rec);
   }
   const records = getRecords();
-  const newLv = getLevelInfo(records.length).lv;
+  const newLv = getLevelInfo(getXp()).lv;
   renderHome();
   const last = records[records.length - 1];
   const boost = calcBoostScore(last);
@@ -1734,13 +1785,13 @@ async function analyze() {
   btn.disabled = true;
   document.getElementById('btn-text').textContent = 'ミナモが分析中...';
 
-  const prevLv = getLevelInfo(getRecords().length).lv;
+  const prevLv = getLevelInfo(getXp()).lv;
   const boost = calcBoostScore(data);
   const stress = calcStressScore(data);
   saveRecord({ ...data, boostScore: boost.total, stressScore: stress });
 
   const records = getRecords();
-  const newLv = getLevelInfo(records.length).lv;
+  const newLv = getLevelInfo(getXp()).lv;
   const burnout = calcBurnoutRisk(records);
 
   showPage('result');
@@ -1751,14 +1802,13 @@ async function analyze() {
     bubbles.innerHTML = `<div class="ai-loading"><div class="dot-pulse"><span></span><span></span><span></span></div> ミナモが考え中...</div>`;
     const text = await getAIDiary(data, boost, stress, burnout);
     if (text) {
-      const parts = text.split(/\n+/).filter(t => t.trim()).slice(0, 3);
-      bubbles.innerHTML = parts.map(p => `<div class="bubble">${escapeHtml(p)}</div>`).join('');
+      bubbles.innerHTML = `<div class="bubble">${escapeHtml(text.replace(/\n+/g, ' ').trim())}</div>`;
     } else {
-      bubbles.innerHTML = shizukuDiary(data, boost, stress, burnout).map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
+      bubbles.innerHTML = `<div class="bubble">${escapeHtml(shizukuDiary(data, boost, stress, burnout))}</div>`;
       showToast('AI接続に失敗したので定型コメントを表示してるよ');
     }
   } else {
-    bubbles.innerHTML = shizukuDiary(data, boost, stress, burnout).map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
+    bubbles.innerHTML = `<div class="bubble">${escapeHtml(shizukuDiary(data, boost, stress, burnout))}</div>`;
   }
 
   renderCharts(records);
@@ -1808,12 +1858,16 @@ function renderResult(data, boost, stress, burnout, records) {
   if (insight.ready) {
     insightCard = `
     <div class="diary-card insight-card">
-      <div class="diary-head"><span class="en">INSIGHT</span>ミナモの気づき<span class="insight-sub">データ分析</span></div>
+      <div class="diary-head"><span class="en">INSIGHT</span>ミナモの気づき<span class="insight-sub">分析 → アドバイス</span></div>
       <div class="diary-flex">
         <div class="diary-avatar">${minamoAva(60, 'think')}</div>
         <div class="diary-bubbles">
-          ${insight.items.map(i => `<div class="bubble insight-bubble"><span class="ins-ic">${i.icon}</span>${escapeHtml(i.msg)}</div>`).join('')}
+          <div class="bubble insight-advice">${escapeHtml(insight.advice)}</div>
         </div>
+      </div>
+      <div class="insight-evidence">
+        <div class="insight-ev-label">📊 データから見えたこと</div>
+        ${insight.items.map(i => `<div class="insight-ev"><span class="ins-ic">${i.icon}</span>${escapeHtml(i.msg)}</div>`).join('')}
       </div>
       <div class="diary-hint insight-note">※ ${insight.n}日分の記録から計算した「傾向」だよ。記録が増えるほどはっきりしてくるし、関係があっても原因とは限らないから、参考にしてね😊</div>
     </div>`;
@@ -1848,7 +1902,7 @@ function renderResult(data, boost, stress, burnout, records) {
           <div class="wk-stat"><div class="wk-k">連続記録</div><div class="wk-v">${wk.streak}<span class="wk-u">日</span></div><span class="wk-delta flat">累計 ${wk.total}日</span></div>
         </div>
       </div>`;
-  const lvInfo = getLevelInfo(records.length);
+  const lvInfo = getLevelInfo(getXp());
   // 日記のしずくの表情を状況で出し分け
   let avatarExpr;
   if (burnout.label === 'HIGH' || parseFloat(data.sleep) < 5) avatarExpr = 'sleepy';
@@ -2034,8 +2088,7 @@ function showResultFor(dateStr) {
   showPage('result');
   renderResult(rec, boost, stress, burnout, records);
   const bubbles = document.getElementById('diary-bubbles');
-  if (bubbles) bubbles.innerHTML = shizukuDiary(rec, boost, stress, burnout)
-    .map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
+  if (bubbles) bubbles.innerHTML = `<div class="bubble">${escapeHtml(shizukuDiary(rec, boost, stress, burnout))}</div>`;
   renderCharts(records);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
