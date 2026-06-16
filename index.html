@@ -389,6 +389,7 @@
   .badge-sky    { background: var(--ice); color: var(--blue-deep); }
 
   .score-note { margin-top: 10px; font-size: 12px; color: var(--ink2); line-height: 1.65; }
+  .score-basis { margin-top: 6px; font-size: 11px; color: var(--ink3); line-height: 1.55; }
 
   /* ===== GAUGE ===== */
   .boost-flex { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
@@ -428,6 +429,15 @@
   .diary-avatar { flex-shrink: 0; }
   .diary-bubbles { flex: 1; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
   .diary-hint { margin-top: 14px; font-size: 11.5px; color: var(--ink3); }
+  .insight-card { border-color: #c7d2fe; background: linear-gradient(180deg,#fbfcff 0%,#f4f6ff 100%); }
+  .insight-sub {
+    margin-left: auto; font-family: 'Outfit'; font-size: 9.5px; font-weight: 700;
+    letter-spacing: 1.5px; color: #6366f1; background: #eef2ff;
+    padding: 3px 9px; border-radius: 100px;
+  }
+  .insight-bubble { background: #fff; border: 1px solid #e6ebf7; }
+  .insight-bubble .ins-ic { margin-right: 7px; }
+  .insight-note { color: var(--ink3); font-size: 11px; line-height: 1.6; }
   .diary-hint button {
     background: none; border: none; color: var(--blue-deep); cursor: pointer;
     font-size: 11.5px; text-decoration: underline; padding: 0;
@@ -1470,6 +1480,101 @@ function shizukuDiary(d, boost, stress, burnout) {
   return msgs.slice(0, 4);
 }
 
+/* ===== INSIGHTS（ミナモの気づき＝傾向分析）===== */
+function _mean(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
+function _median(a){ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; }
+function _pearson(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  const mx=_mean(xs), my=_mean(ys);
+  let sxy=0,sxx=0,syy=0;
+  for(let i=0;i<n;i++){ const dx=xs[i]-mx, dy=ys[i]-my; sxy+=dx*dy; sxx+=dx*dx; syy+=dy*dy; }
+  if(sxx===0||syy===0) return null;
+  return sxy/Math.sqrt(sxx*syy);
+}
+function _sgn(v,dec){ const d=(dec===undefined?1:dec); const s=v.toFixed(d); return v>=0 ? ('+'+s) : s; }
+
+// 記録から「傾向」を抽出して、強い順に上位3つ返す
+function buildInsights(records){
+  const MIN = 5;
+  if (records.length < MIN) return { ready:false, need: MIN - records.length };
+  const col = k => records.map(r => parseFloat(r[k]));
+  const cand = [];
+
+  // 1) 連続値ドライバー（中央値で分割）→ アウトカムの差
+  const condPairs = [
+    ['sleep','睡眠','時間','focus','集中度','💤'],
+    ['sleep','睡眠','時間','mood','気分','💤'],
+    ['water','水分','L','focus','集中度','💧'],
+    ['water','水分','L','mood','気分','💧']
+  ];
+  for (const [dk,dl,du,ok,ol,ic] of condPairs){
+    const mid=_median(col(dk));
+    const hi=[], lo=[];
+    records.forEach(r=>{ (parseFloat(r[dk])>=mid?hi:lo).push(parseFloat(r[ok])); });
+    if (hi.length>=2 && lo.length>=2){
+      const diff=_mean(hi)-_mean(lo);
+      if (Math.abs(diff)>=0.7){
+        cand.push({ strength:Math.abs(diff), dkey:[dk,ok].sort().join('|'), icon:ic,
+          msg:`${dl}が${(Math.round(mid*10)/10)}${du}以上の日は、${ol}が平均で ${_sgn(diff)} ${diff>=0?'高め':'低め'}だったよ（${hi.length}日 vs ${lo.length}日）。` });
+      }
+    }
+  }
+
+  // 2) 運動の有無 → 気分・集中
+  for (const [ok,ol] of [['mood','気分'],['focus','集中度']]){
+    const yes=[], no=[];
+    records.forEach(r=>{ (+r.exercise>0?yes:no).push(parseFloat(r[ok])); });
+    if (yes.length>=2 && no.length>=2){
+      const diff=_mean(yes)-_mean(no);
+      if (Math.abs(diff)>=0.7){
+        cand.push({ strength:Math.abs(diff), dkey:['exercise',ok].sort().join('|'), icon:'🏃',
+          msg:`運動した日は、しなかった日より${ol}が平均で ${_sgn(diff)} ${diff>=0?'高い':'低い'}みたい（運動あり${yes.length}日／なし${no.length}日）。` });
+      }
+    }
+  }
+
+  // 3) 直近の傾向（前半 vs 後半）
+  if (records.length>=6){
+    const half=Math.floor(records.length/2);
+    const early=records.slice(0,half), late=records.slice(-half);
+    for (const [k,l,unit,thr] of [['sleep','睡眠','時間',0.5],['mood','気分','',0.7],['focus','集中度','',0.7]]){
+      const diff=_mean(late.map(r=>parseFloat(r[k])))-_mean(early.map(r=>parseFloat(r[k])));
+      if (Math.abs(diff)>=thr){
+        cand.push({ strength:Math.abs(diff), dkey:'trend|'+k, icon: diff>=0?'📈':'📉',
+          msg:`最近は、${l}が記録の前半より平均 ${_sgn(diff)}${unit} ${diff>=0?'上向きだよ':'下向き気味かな'}。` });
+      }
+    }
+  }
+
+  // 4) 相関がいちばん強いペアを1つ（データが十分なときだけ）
+  if (records.length>=7){
+    const cp=[['sleep','睡眠','focus','集中度'],['sleep','睡眠','mood','気分'],['water','水分','focus','集中度'],['study','作業時間','mood','気分'],['exercise','運動','mood','気分']];
+    let best=null;
+    for (const [ak,al,bk,bl] of cp){
+      const r=_pearson(col(ak),col(bk));
+      if (r!==null && Math.abs(r)>=0.45 && (!best || Math.abs(r)>Math.abs(best.r))) best={r,al,bl,ak,bk};
+    }
+    if (best){
+      cand.push({ strength:1.0+Math.abs(best.r)*2, dkey:[best.ak,best.bk].sort().join('|'), icon:'📊',
+        msg:`${best.al}と${best.bl}には ${best.r>=0?'プラス':'マイナス'}の関係が見えるよ（相関 ${_sgn(best.r,2)}）。${Math.abs(best.r)>=0.6?'けっこうはっきりした':'ゆるやかな'}傾向だね。` });
+    }
+  }
+
+  // 5) ベースライン（必ず作れる・弱め）
+  cand.push({ strength:0.3, dkey:'base', icon:'🧭',
+    msg:`これまで${records.length}日分の平均は、睡眠${_mean(col('sleep')).toFixed(1)}時間・気分${_mean(col('mood')).toFixed(1)}/10・集中${_mean(col('focus')).toFixed(1)}/10だよ。` });
+
+  // 強い順 → 同じ変数ペアは1つだけ → 上位3つ
+  cand.sort((a,b)=>b.strength-a.strength);
+  const seen=new Set(), items=[];
+  for (const c of cand){
+    if (seen.has(c.dkey)) continue;
+    seen.add(c.dkey); items.push(c);
+    if (items.length>=3) break;
+  }
+  return { ready:true, items, n:records.length };
+}
+
 /* ===== MEMORIES ===== */
 function buildMemories(records) {
   if (records.length < 10) return null;
@@ -1669,6 +1774,32 @@ function renderResult(data, boost, stress, burnout, records) {
   ).join('');
 
   const memories = buildMemories(records);
+  const insight = buildInsights(records);
+  let insightCard;
+  if (insight.ready) {
+    insightCard = `
+    <div class="diary-card insight-card">
+      <div class="diary-head"><span class="en">INSIGHT</span>ミナモの気づき<span class="insight-sub">データ分析</span></div>
+      <div class="diary-flex">
+        <div class="diary-avatar">${minamoAva(60, 'think')}</div>
+        <div class="diary-bubbles">
+          ${insight.items.map(i => `<div class="bubble insight-bubble"><span class="ins-ic">${i.icon}</span>${escapeHtml(i.msg)}</div>`).join('')}
+        </div>
+      </div>
+      <div class="diary-hint insight-note">※ ${insight.n}日分の記録から計算した「傾向」だよ。記録が増えるほどはっきりしてくるし、関係があっても原因とは限らないから、参考にしてね😊</div>
+    </div>`;
+  } else {
+    insightCard = `
+    <div class="diary-card insight-card">
+      <div class="diary-head"><span class="en">INSIGHT</span>ミナモの気づき<span class="insight-sub">データ分析</span></div>
+      <div class="diary-flex">
+        <div class="diary-avatar">${minamoAva(60, 'think')}</div>
+        <div class="diary-bubbles">
+          <div class="bubble insight-bubble"><span class="ins-ic">📊</span>もう少し記録がたまると、あなたのデータから「睡眠と集中の関係」みたいな傾向を見つけられるよ。あと${insight.need}日分くらいで分析できそう！一緒に続けようね😊</div>
+        </div>
+      </div>
+    </div>`;
+  }
   const lvInfo = getLevelInfo(records.length);
   // 日記のしずくの表情を状況で出し分け
   let avatarExpr;
@@ -1685,6 +1816,7 @@ function renderResult(data, boost, stress, burnout, records) {
     <div class="scores-grid">
       <div class="score-card">
         <div class="score-label"><span class="dot" style="background:#0ea5e9"></span>Human Boost Score</div>
+        <div class="score-basis">睡眠・気分・集中・運動・水分・作業バランスの6項目を合計（100点満点）</div>
         <div class="boost-flex">
           <div class="gauge-wrap">
             <svg viewBox="0 0 120 120" class="gauge" aria-hidden="true">
@@ -1703,6 +1835,7 @@ function renderResult(data, boost, stress, burnout, records) {
       </div>
       <div class="score-card">
         <div class="score-label"><span class="dot" style="background:#f59e0b"></span>Stress Score</div>
+        <div class="score-basis">睡眠・気分・集中・作業量・運動・水分の負荷をスコア化</div>
         <div class="score-num ${stressCls}">${stress}<span class="denom"> / 100</span></div>
         <div class="breakdown" style="margin-top:14px">
           <div class="bar-row"><span class="bar-label">レベル</span><div class="bar-track"><div class="bar-fill" style="width:${stress}%;background:${stress<=30?'#10b981':stress<=60?'#f59e0b':'#ef4444'}"></div></div></div>
@@ -1711,6 +1844,7 @@ function renderResult(data, boost, stress, burnout, records) {
       </div>
       <div class="score-card">
         <div class="score-label"><span class="dot" style="background:#ef4444"></span>Burnout Risk（7日間）</div>
+        <div class="score-basis">直近7日間の睡眠・気分・集中の平均から判定</div>
         <div class="score-num ${bCls} word"><span class="big-dot" style="background:${bColors[burnout.label]}"></span>${burnout.label}</div>
         <div class="score-note">${bNote}</div>
         <span class="score-badge ${bBadge}">${burnout.label}</span>
@@ -1723,6 +1857,8 @@ function renderResult(data, boost, stress, burnout, records) {
         <span class="score-badge ${hyd.badge}">${hyd.label}</span>
       </div>
     </div>
+
+    ${insightCard}
 
     <div class="diary-card">
       <div class="diary-head"><span class="en">DIARY</span>ミナモ日記</div>
