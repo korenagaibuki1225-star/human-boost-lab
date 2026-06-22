@@ -524,6 +524,17 @@
   .hm-wd { height: 13px; font-size: 8.5px; color: var(--ink3); line-height: 13px; text-align: right; padding-right: 3px; }
   .hm-legend { display: flex; align-items: center; gap: 5px; margin-top: 13px; font-size: 10.5px; color: var(--ink3); flex-wrap: wrap; }
   .hm-legend .hm-cell { display: inline-block; width: 11px; height: 11px; vertical-align: middle; }
+  /* ===== 曜日パターン ===== */
+  .wd-chart { display: flex; align-items: flex-end; gap: 8px; height: 112px; margin-top: 4px; }
+  .wd-col2 { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .wd-val { font-size: 10px; color: var(--ink2); font-weight: 700; margin-bottom: 3px; }
+  .wd-bar { width: 62%; max-width: 32px; min-height: 4px; border-radius: 6px 6px 0 0; background: var(--hm-3); transition: height .45s ease; }
+  .wd-bar.best { background: var(--blue-deep); }
+  .wd-bar.none { background: var(--line2); opacity: .6; }
+  .wd-lbl { font-size: 11.5px; color: var(--ink3); margin-top: 7px; }
+  .wd-lbl.best { color: var(--blue-deep); font-weight: 700; }
+  .wd-insight { margin-top: 14px; font-size: 13px; color: var(--ink); line-height: 1.7; background: var(--ice); border-radius: 12px; padding: 12px 14px; }
+  .wd-insight .wd-ic { margin-right: 7px; }
   .cal-dow { text-align: center; font-family: 'Outfit'; font-size: 9.5px; letter-spacing: 1px; color: var(--ink3); font-weight: 700; padding: 4px 0; }
   .cal-cell {
     aspect-ratio: 1; border-radius: 9px; background: #f7fafc;
@@ -839,6 +850,8 @@
         <span style="margin-left:auto;">マスをタップでその日の結果へ</span>
       </div>
     </div>
+
+    <div id="weekday-pattern"></div>
 
     <div class="cal-card">
       <div class="cal-head">
@@ -2304,6 +2317,72 @@ function showResultFor(dateStr) {
   renderCharts(records);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+/* ===== 曜日パターン分析 ===== */
+function buildWeekdayPattern(records) {
+  const MIN = 14;
+  if (records.length < MIN) return { ready: false, need: MIN - records.length };
+  const buckets = Array.from({ length: 7 }, () => ({ boost: [], sleep: [], mood: [], focus: [] }));
+  records.forEach(r => {
+    const p = r.date.split('-');
+    const wd = new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+    const b = buckets[wd];
+    b.boost.push(r.boostScore != null ? r.boostScore : calcBoostScore(r).total);
+    b.sleep.push(parseFloat(r.sleep));
+    b.mood.push(+r.mood);
+    b.focus.push(+r.focus);
+  });
+  const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const days = buckets.map((b, i) => ({ wd: i, n: b.boost.length, boost: mean(b.boost), sleep: mean(b.sleep), mood: mean(b.mood), focus: mean(b.focus) }));
+  return { ready: true, days, n: records.length };
+}
+
+function renderWeekdayPattern() {
+  const host = document.getElementById('weekday-pattern');
+  if (!host) return;
+  const records = getRecords();
+  const wp = buildWeekdayPattern(records);
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const order = [1, 2, 3, 4, 5, 6, 0];   // 月→日で表示
+  const head = `<div class="cal-head" style="justify-content:flex-start;gap:10px;"><div class="cal-title">曜日のクセ</div><span style="font-size:11px;color:var(--ink3);">WEEKDAY PATTERN・平均Boost</span></div>`;
+
+  if (!wp.ready) {
+    host.innerHTML = `<div class="cal-card">${head}
+      <div style="font-size:13px;color:var(--ink2);line-height:1.7;">もう少し記録がたまると、曜日ごとのクセ（「月曜は集中が落ちやすい」みたいな傾向）が見えてくるよ。あと${wp.need}日分くらいで分析できそう📊</div>
+    </div>`;
+    return;
+  }
+
+  const withData = order.map(wd => wp.days[wd]).filter(d => d.n > 0);
+  const boosts = withData.map(d => d.boost);
+  const maxB = Math.max(...boosts), minB = Math.min(...boosts);
+  const best = withData.reduce((a, b) => b.boost > a.boost ? b : a);
+  const worst = withData.reduce((a, b) => b.boost < a.boost ? b : a);
+
+  const bars = order.map(wd => {
+    const d = wp.days[wd];
+    if (!d.n) return `<div class="wd-col2"><div class="wd-bar none" style="height:8%"></div><div class="wd-lbl">${WD[wd]}</div></div>`;
+    const h = 35 + ((d.boost - minB) / ((maxB - minB) || 1)) * 60;
+    const isBest = d.wd === best.wd;
+    return `<div class="wd-col2"><div class="wd-val">${Math.round(d.boost)}</div><div class="wd-bar${isBest ? ' best' : ''}" style="height:${h}%"></div><div class="wd-lbl${isBest ? ' best' : ''}">${WD[wd]}</div></div>`;
+  }).join('');
+
+  // worst曜日で「最も平均より下がっている指標」を見つけて助言を変える
+  const ov = k => { const a = records.map(r => +r[k]); return a.reduce((x, y) => x + y, 0) / a.length; };
+  const oSleep = records.reduce((s, r) => s + parseFloat(r.sleep), 0) / records.length;
+  const deficits = [
+    [oSleep - worst.sleep, `${WD[worst.wd]}曜は睡眠が短くなりがちだから、前の夜は少し早めに休めると変わるかも`],
+    [ov('focus') - worst.focus, `${WD[worst.wd]}曜は集中が乗りにくいみたいだから、軽いタスクから始めてみるといいかも`],
+    [ov('mood') - worst.mood, `${WD[worst.wd]}曜は気分が下がりやすいから、好きなことをする時間を少し入れてみてね`]
+  ].sort((a, b) => b[0] - a[0]);
+  const tip = deficits[0][0] > 0 ? deficits[0][1] : `${WD[worst.wd]}曜は少しペースを落として、自分をいたわる日にしてみてね`;
+  const insight = `${WD[best.wd]}曜は調子が上がりやすくて、${WD[worst.wd]}曜は少し下がりやすいみたい。${tip}😊`;
+
+  host.innerHTML = `<div class="cal-card">${head}
+    <div class="wd-chart">${bars}</div>
+    <div class="wd-insight"><span class="wd-ic">📊</span>${escapeHtml(insight)}</div>
+  </div>`;
+}
+
 function renderHeatmap() {
   const host = document.getElementById('heatmap');
   if (!host) return;
@@ -2432,6 +2511,7 @@ function clearHistory() {
   clearAllRecords();                 // メモリ即クリア＋IndexedDB/localStorageも消す
   localStorage.removeItem(MIS_KEY);
   renderHeatmap();
+  renderWeekdayPattern();
   renderHistory();
   renderCalendar();
   renderHome();
@@ -2447,7 +2527,7 @@ function showPage(name) {
   document.getElementById('nav-' + name).classList.add('active');
   const bn = document.getElementById('bnav-' + name);
   if (bn) bn.classList.add('active');
-  if (name === 'history') { renderHeatmap(); renderHistory(); renderCalendar(); }
+  if (name === 'history') { renderHeatmap(); renderWeekdayPattern(); renderHistory(); renderCalendar(); }
   if (name === 'settings') { const k = getApiKey(); if (k) document.getElementById('api-key-input').value = k; updateKeyStatus(); }
   window.scrollTo({ top: 0 });
 }
