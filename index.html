@@ -510,6 +510,8 @@
     display: flex; align-items: center; justify-content: center;
   }
   .cal-nav:hover { background: var(--ice); color: var(--blue-deep); }
+  .cal-nav:disabled { opacity: .28; cursor: default; }
+  .cal-nav:disabled:hover { background: transparent; color: inherit; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
   /* ===== Heatmap（GitHub風） ===== */
   .hm-scroll { overflow-x: auto; padding-bottom: 4px; }
@@ -535,6 +537,11 @@
   .wd-lbl.best { color: var(--blue-deep); font-weight: 700; }
   .wd-insight { margin-top: 14px; font-size: 13px; color: var(--ink); line-height: 1.7; background: var(--ice); border-radius: 12px; padding: 12px 14px; }
   .wd-insight .wd-ic { margin-right: 7px; }
+  /* ===== 月次レポート ===== */
+  .mr-days { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .mr-day { flex: 1; min-width: 165px; text-align: left; font-size: 12px; font-weight: 600; color: var(--ink); background: var(--ice); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; cursor: pointer; transition: transform .1s; }
+  .mr-day:hover { transform: translateY(-1px); }
+  .mr-day.worst { background: #fff7ed; border-color: #fed7aa; }
   .cal-dow { text-align: center; font-family: 'Outfit'; font-size: 9.5px; letter-spacing: 1px; color: var(--ink3); font-weight: 700; padding: 4px 0; }
   .cal-cell {
     aspect-ratio: 1; border-radius: 9px; background: #f7fafc;
@@ -832,6 +839,8 @@
         <button class="btn-danger" onclick="clearHistory()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M7.5 7l.7 12a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9l.7-12"/></svg>全削除</button>
       </div>
     </div>
+
+    <div id="monthly-report"></div>
 
     <div class="cal-card">
       <div class="cal-head" style="justify-content:flex-start; gap:10px;">
@@ -2317,6 +2326,89 @@ function showResultFor(dateStr) {
   renderCharts(records);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+/* ===== 月次レポート ===== */
+function buildMonthlyReport(records, targetYm) {
+  if (!records.length) return null;
+  const ym = targetYm || records[records.length - 1].date.slice(0, 7);     // 指定がなければ最新月
+  const inMonth = records.filter(r => r.date.slice(0, 7) === ym);
+  const [y, m] = ym.split('-').map(Number);
+  if (inMonth.length < 3) return { ym, year: y, month: m, few: true, n: inMonth.length };
+  const prev = new Date(y, m - 2, 1);
+  const prevYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonth = records.filter(r => r.date.slice(0, 7) === prevYm);
+  const boostOf = r => r.boostScore != null ? r.boostScore : calcBoostScore(r).total;
+  const mean = (arr, f) => arr.length ? arr.reduce((s, r) => s + f(r), 0) / arr.length : null;
+  const avgBoost = mean(inMonth, boostOf);
+  const prevAvg = prevMonth.length >= 3 ? mean(prevMonth, boostOf) : null;
+  const sorted = [...inMonth].sort((a, b) => boostOf(b) - boostOf(a));
+  const best = sorted[0], worst = sorted[sorted.length - 1];
+  return {
+    ym, year: y, month: m, n: inMonth.length,
+    avgBoost, avgSleep: mean(inMonth, r => parseFloat(r.sleep)),
+    avgMood: mean(inMonth, r => +r.mood), avgFocus: mean(inMonth, r => +r.focus),
+    totalEx: inMonth.reduce((s, r) => s + (+r.exercise || 0), 0),
+    dBoost: prevAvg != null ? avgBoost - prevAvg : null,
+    best, worst, bestBoost: boostOf(best), worstBoost: boostOf(worst)
+  };
+}
+
+let reportIdx = null;   // 表示中の月（monthsWithDataのインデックス）
+function monthsWithData(records) {
+  return [...new Set(records.map(r => r.date.slice(0, 7)))].sort();
+}
+function reportShift(n) {
+  const months = monthsWithData(getRecords());
+  if (!months.length) return;
+  if (reportIdx == null) reportIdx = months.length - 1;
+  reportIdx = Math.max(0, Math.min(months.length - 1, reportIdx + n));
+  renderMonthlyReport();
+}
+function renderMonthlyReport() {
+  const host = document.getElementById('monthly-report');
+  if (!host) return;
+  const records = getRecords();
+  const months = monthsWithData(records);
+  if (!months.length) {
+    host.innerHTML = `<div class="cal-card insight-card"><div class="cal-head" style="justify-content:flex-start;gap:10px;"><div class="cal-title">ふりかえり</div><span style="font-size:11px;color:var(--ink3);">MONTHLY REPORT</span></div><div style="font-size:13px;color:var(--ink2);line-height:1.7;">記録がたまると、1ヶ月のふりかえりレポートが作れるよ。まずは数日、記録してみてね📊</div></div>`;
+    return;
+  }
+  if (reportIdx == null || reportIdx > months.length - 1) reportIdx = months.length - 1;
+  const rep = buildMonthlyReport(records, months[reportIdx]);
+  const atStart = reportIdx <= 0, atEnd = reportIdx >= months.length - 1;
+  const nav = `<div class="cal-head">
+      <button class="cal-nav" onclick="reportShift(-1)" ${atStart ? 'disabled' : ''} aria-label="前の月">◀</button>
+      <div class="cal-title">${rep.year}年${rep.month}月のふりかえり</div>
+      <button class="cal-nav" onclick="reportShift(1)" ${atEnd ? 'disabled' : ''} aria-label="次の月">▶</button>
+    </div>`;
+  if (rep.few) {
+    host.innerHTML = `<div class="cal-card insight-card">${nav}<div style="font-size:13px;color:var(--ink2);line-height:1.7;text-align:center;padding:8px 0 2px;">この月の記録は${rep.n}日だけ。あと数日たまると、ふりかえりレポートが作れるよ📊</div></div>`;
+    return;
+  }
+
+  const delta = rep.dBoost == null
+    ? '<span class="wk-delta flat">先月比 —</span>'
+    : `<span class="wk-delta ${Math.abs(rep.dBoost) < 0.5 ? 'flat' : (rep.dBoost > 0 ? 'up' : 'down')}">${rep.dBoost >= 0 ? '▲ +' : '▼ '}${rep.dBoost.toFixed(1)}<span class="wk-vs"> 先月比</span></span>`;
+  const trend = rep.dBoost == null ? 'この1ヶ月、コツコツ記録を積み重ねられたね。'
+    : rep.dBoost >= 1 ? `全体の調子は先月より上向きで、平均Boostが ${rep.dBoost.toFixed(1)} ポイント伸びたよ。いい流れだね。`
+    : rep.dBoost <= -1 ? 'これは先月よりは少しお疲れ気味の月だったかな。でも、しんどい時期もちゃんと記録できたことが、何より大事だよ。'
+    : '先月と同じくらい、安定したペースを保てた1ヶ月だったね。';
+  const letter = `${rep.month}月のふりかえりだよ。この1ヶ月で${rep.n}日も記録できたね、よくがんばった。${trend}いちばん調子が良かったのは${+rep.best.date.slice(8)}日（Boost ${rep.bestBoost}）。逆に${+rep.worst.date.slice(8)}日は少しふんばった日だったけど、そんな日も含めて全部があなたの大切な記録だよ。来月も、無理のないペースで一緒に続けていこうね😊`;
+
+  host.innerHTML = `<div class="cal-card insight-card">${nav}
+    <div class="wk-stats" style="margin-bottom:4px;">
+      <div class="wk-stat"><div class="wk-k">記録日数</div><div class="wk-v">${rep.n}<span class="wk-u">日</span></div><span class="wk-delta flat">この月</span></div>
+      <div class="wk-stat"><div class="wk-k">平均Boost</div><div class="wk-v">${Math.round(rep.avgBoost)}<span class="wk-u">/100</span></div>${delta}</div>
+      <div class="wk-stat"><div class="wk-k">平均睡眠</div><div class="wk-v">${rep.avgSleep.toFixed(1)}<span class="wk-u">h</span></div><span class="wk-delta flat">平均気分 ${rep.avgMood.toFixed(1)}</span></div>
+      <div class="wk-stat"><div class="wk-k">運動の合計</div><div class="wk-v">${rep.totalEx}<span class="wk-u">分</span></div><span class="wk-delta flat">平均集中 ${rep.avgFocus.toFixed(1)}</span></div>
+    </div>
+    <div class="mr-days">
+      <button class="mr-day best" onclick="showResultFor('${rep.best.date}')">🌟 ベストデー　${+rep.best.date.slice(5, 7)}/${+rep.best.date.slice(8)}（Boost ${rep.bestBoost}）</button>
+      <button class="mr-day worst" onclick="showResultFor('${rep.worst.date}')">🌱 ふんばった日　${+rep.worst.date.slice(5, 7)}/${+rep.worst.date.slice(8)}（Boost ${rep.worstBoost}）</button>
+    </div>
+    <div class="wd-insight" style="background:#fff;border:1px solid #e6ebf7;"><span class="wd-ic">📝</span>${escapeHtml(letter)}</div>
+  </div>`;
+}
+
 /* ===== 曜日パターン分析 ===== */
 function buildWeekdayPattern(records) {
   const MIN = 14;
@@ -2510,6 +2602,7 @@ function clearHistory() {
   if (!confirm('全ての記録を削除しますか？（しずくのレベルもリセットされます）')) return;
   clearAllRecords();                 // メモリ即クリア＋IndexedDB/localStorageも消す
   localStorage.removeItem(MIS_KEY);
+  renderMonthlyReport();
   renderHeatmap();
   renderWeekdayPattern();
   renderHistory();
@@ -2527,7 +2620,7 @@ function showPage(name) {
   document.getElementById('nav-' + name).classList.add('active');
   const bn = document.getElementById('bnav-' + name);
   if (bn) bn.classList.add('active');
-  if (name === 'history') { renderHeatmap(); renderWeekdayPattern(); renderHistory(); renderCalendar(); }
+  if (name === 'history') { renderMonthlyReport(); renderHeatmap(); renderWeekdayPattern(); renderHistory(); renderCalendar(); }
   if (name === 'settings') { const k = getApiKey(); if (k) document.getElementById('api-key-input').value = k; updateKeyStatus(); }
   window.scrollTo({ top: 0 });
 }
