@@ -24,6 +24,12 @@
     --ice2: #d9effb;
     --teal: #14b8a6;
     --teal-soft: #e6faf6;
+    --hm-e: #eef2f6;
+    --hm-1: #cfe9fb;
+    --hm-2: #92cdf0;
+    --hm-3: #4fb0e8;
+    --hm-4: #1593dd;
+    --hm-5: #0369a1;
     --green: #10b981;
     --green-soft: #eafaf3;
     --amber: #f59e0b;
@@ -505,6 +511,19 @@
   }
   .cal-nav:hover { background: var(--ice); color: var(--blue-deep); }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  /* ===== Heatmap（GitHub風） ===== */
+  .hm-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .hm-cols { display: flex; gap: 3px; width: max-content; }
+  .hm-col { display: flex; flex-direction: column; gap: 3px; }
+  .hm-month { height: 14px; font-size: 9.5px; color: var(--ink3); font-weight: 700; line-height: 14px; white-space: nowrap; }
+  .hm-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--hm-e); }
+  .hm-cell.hm-has { cursor: pointer; transition: transform .1s; }
+  .hm-cell.hm-has:hover { transform: scale(1.3); outline: 1.5px solid var(--blue-deep); }
+  .hm-cell.hm-future { background: transparent; }
+  .hm-labelcol { margin-right: 2px; }
+  .hm-wd { height: 13px; font-size: 8.5px; color: var(--ink3); line-height: 13px; text-align: right; padding-right: 3px; }
+  .hm-legend { display: flex; align-items: center; gap: 5px; margin-top: 13px; font-size: 10.5px; color: var(--ink3); flex-wrap: wrap; }
+  .hm-legend .hm-cell { display: inline-block; width: 11px; height: 11px; vertical-align: middle; }
   .cal-dow { text-align: center; font-family: 'Outfit'; font-size: 9.5px; letter-spacing: 1px; color: var(--ink3); font-weight: 700; padding: 4px 0; }
   .cal-cell {
     aspect-ratio: 1; border-radius: 9px; background: #f7fafc;
@@ -804,6 +823,24 @@
     </div>
 
     <div class="cal-card">
+      <div class="cal-head" style="justify-content:flex-start; gap:10px;">
+        <div class="cal-title">調子のヒートマップ</div>
+        <span style="font-size:11px;color:var(--ink3);">日々のBoostスコアの濃淡</span>
+      </div>
+      <div id="heatmap"></div>
+      <div class="hm-legend">
+        <span>低い</span>
+        <span class="hm-cell" style="background:var(--hm-1)"></span>
+        <span class="hm-cell" style="background:var(--hm-2)"></span>
+        <span class="hm-cell" style="background:var(--hm-3)"></span>
+        <span class="hm-cell" style="background:var(--hm-4)"></span>
+        <span class="hm-cell" style="background:var(--hm-5)"></span>
+        <span>高い</span>
+        <span style="margin-left:auto;">マスをタップでその日の結果へ</span>
+      </div>
+    </div>
+
+    <div class="cal-card">
       <div class="cal-head">
         <button class="cal-nav" onclick="calShift(-1)" aria-label="前の月">◀</button>
         <div class="cal-title" id="cal-title"></div>
@@ -862,7 +899,7 @@
       <div class="settings-section-title"><span class="en">DATA</span>データ管理</div>
       <div class="form-card">
         <p style="font-size:13px;color:var(--ink2);margin-bottom:14px;line-height:1.7">
-          記録データはブラウザのlocalStorageに保存されています。ブラウザのキャッシュ削除やシークレットモードでは消えるので、ときどきCSVでバックアップしておくと安心です。
+          記録データはこのブラウザ内（IndexedDB、控えとしてlocalStorageにも）に保存されています。ブラウザのデータ消去やシークレットモードでは消えるので、ときどきCSVでバックアップしておくと安心です。
         </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-secondary" onclick="exportCSV()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10"/><path d="m7.5 10.5 4.5 4 4.5-4"/><path d="M5 19h14"/></svg>CSVでエクスポート</button>
@@ -950,17 +987,83 @@ function dropIcon(size, color) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color || 'currentColor'}" aria-hidden="true"><path d="M12 3.2C12 3.2 6.3 9.9 6.3 14.2a5.7 5.7 0 0 0 11.4 0C17.7 9.9 12 3.2 12 3.2Z"/></svg>`;
 }
 
-/* ===== RECORDS ===== */
-function getRecords() {
-  try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); }
-  catch(e) { return []; }
+/* ===== RECORDS (IndexedDB を主 + localStorage に控え) ===== */
+let _recordsCache = [];   // 同期的に読めるメモリ上のキャッシュ（読み取りの正本）
+let _db = null;           // IndexedDB ハンドル
+let _dbReady = false;     // IndexedDB が使えるか
+
+function _openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('HumanBoostLabDB', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('records')) db.createObjectStore('records', { keyPath: 'date' });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
 }
+function _idbAll() {
+  return new Promise((resolve, reject) => {
+    const req = _db.transaction('records', 'readonly').objectStore('records').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+function _idbPut(rec) {
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction('records', 'readwrite');
+    tx.objectStore('records').put(rec);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function _idbClear() {
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction('records', 'readwrite');
+    tx.objectStore('records').clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// 起動時に一度だけ呼ぶ：IndexedDBを開いて、記録をメモリへ読み込む（旧localStorageデータは自動移行）
+async function initStorage() {
+  let ls = [];
+  try { ls = JSON.parse(localStorage.getItem(REC_KEY) || '[]'); } catch(e) {}
+  try {
+    _db = await _openDB();
+    let rows = await _idbAll();
+    if (rows.length === 0 && ls.length > 0) {     // 旧localStorage → IndexedDB へ一度だけ移行
+      for (const r of ls) await _idbPut(r);
+      rows = ls.slice();
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    _recordsCache = rows;
+    _dbReady = true;
+  } catch(e) {                                    // IndexedDB非対応でもlocalStorageで動く
+    console.warn('IndexedDB unavailable, using localStorage:', e);
+    ls.sort((a, b) => a.date.localeCompare(b.date));
+    _recordsCache = ls;
+    _dbReady = false;
+  }
+}
+
+// 同期API（中身はメモリキャッシュ）。既存コードはこれまで通り getRecords() / saveRecord() を呼べる
+function getRecords() { return _recordsCache.slice(); }
+
 function saveRecord(rec) {
-  const recs = getRecords();
-  const idx = recs.findIndex(r => r.date === rec.date);
-  if (idx >= 0) recs[idx] = rec; else recs.push(rec);
-  recs.sort((a,b) => a.date.localeCompare(b.date));
-  localStorage.setItem(REC_KEY, JSON.stringify(recs));
+  const i = _recordsCache.findIndex(r => r.date === rec.date);
+  if (i >= 0) _recordsCache[i] = rec; else _recordsCache.push(rec);
+  _recordsCache.sort((a, b) => a.date.localeCompare(b.date));
+  if (_dbReady) _idbPut(rec).catch(e => console.error('IDB put failed:', e));  // 本体はIndexedDBへ
+  try { localStorage.setItem(REC_KEY, JSON.stringify(_recordsCache)); } catch(e) {}  // 控え
+}
+
+async function clearAllRecords() {
+  _recordsCache = [];
+  try { localStorage.removeItem(REC_KEY); } catch(e) {}
+  if (_dbReady) { try { await _idbClear(); } catch(e) { console.error(e); } }
 }
 
 /* ===== API KEY ===== */
@@ -1835,13 +1938,14 @@ async function getAIDiary(data, boost, stress, burnout) {
 /* ===== DEMO DATA ===== */
 function loadDemoData() {
   const existing = getRecords();
-  if (existing.length > 0 && !confirm('デモデータ（2週間分のサンプル記録）を追加します。同じ日付の記録は上書きされますが、よろしいですか？')) return;
+  if (existing.length > 0 && !confirm('デモデータ（約9週間分のサンプル記録）を追加します。同じ日付の記録は上書きされますが、よろしいですか？')) return;
   const notes = ['朝から集中できた','ゼミの準備をがんばった','ちょっと夜更かしした…','散歩したら気分すっきり','課題ラッシュでつかれた','友達とカフェで勉強','早起きできた','新しいことを勉強中','資格の勉強すすんだ','よく寝たら絶好調','運動したらよく眠れた','スライド作りに集中','水こまめに飲んでみた','いい一日だった'];
   const exOptions = [0, 10, 15, 20, 30, 30, 45];
   const prevLv = getLevelInfo(getXp()).lv;
-  for (let i = 13; i >= 0; i--) {
+  const DAYS = 63;
+  for (let i = DAYS - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    const t = (13 - i) / 13;
+    const t = (DAYS - 1 - i) / (DAYS - 1);
     const wob = () => (Math.random() - 0.5);
     const sleep = Math.round(Math.min(9, Math.max(4.5, 5.8 + t * 1.8 + wob() * 1.2)) * 2) / 2;
     const mood  = Math.min(10, Math.max(2, Math.round(5 + t * 3 + wob() * 2)));
@@ -1849,7 +1953,7 @@ function loadDemoData() {
     const study = Math.round((3 + Math.random() * 4) * 2) / 2;
     const exercise = exOptions[Math.floor(Math.random() * exOptions.length)];
     const water = Math.round(Math.min(3, Math.max(0.5, 0.9 + t * 0.9 + wob() * 0.4)) * 10) / 10;
-    const rec = { date: dateToStr(d), sleep, mood, focus, study, exercise, water, note: notes[(13 - i) % notes.length] };
+    const rec = { date: dateToStr(d), sleep, mood, focus, study, exercise, water, note: notes[(DAYS - 1 - i) % notes.length] };
     rec.boostScore = calcBoostScore(rec).total;
     rec.stressScore = calcStressScore(rec);
     saveRecord(rec);
@@ -2200,6 +2304,62 @@ function showResultFor(dateStr) {
   renderCharts(records);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+function renderHeatmap() {
+  const host = document.getElementById('heatmap');
+  if (!host) return;
+  const records = getRecords();
+  const byDate = {};
+  records.forEach(r => { byDate[r.date] = (r.boostScore != null ? r.boostScore : calcBoostScore(r).total); });
+
+  const pad = n => String(n).padStart(2, '0');
+  const key = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  // 表示範囲：最初の記録の週〜今週（最低10週・最大53週）
+  let start = records.length
+    ? (() => { const p = records[0].date.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); })()
+    : new Date(today);
+  const minStart = new Date(today); minStart.setDate(minStart.getDate() - 9 * 7);
+  const maxStart = new Date(today); maxStart.setDate(maxStart.getDate() - 52 * 7);
+  if (start > minStart) start = minStart;
+  if (start < maxStart) start = maxStart;
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());                  // 日曜にスナップ
+  const endOfRange = new Date(today);
+  endOfRange.setDate(endOfRange.getDate() + (6 - today.getDay()));  // 今週の土曜まで
+
+  const lvColor = s => {
+    if (s == null) return 'var(--hm-e)';
+    if (s < 40) return 'var(--hm-1)';
+    if (s < 60) return 'var(--hm-2)';
+    if (s < 75) return 'var(--hm-3)';
+    if (s < 90) return 'var(--hm-4)';
+    return 'var(--hm-5)';
+  };
+
+  let cols = '', prevMonth = -1;
+  for (let cur = new Date(start); cur <= endOfRange; cur.setDate(cur.getDate() + 1)) {
+    if (cur.getDay() === 0) {
+      const m = cur.getMonth();
+      const label = (m !== prevMonth) ? `${m + 1}月` : '';
+      prevMonth = m;
+      cols += `<div class="hm-col"><div class="hm-month">${label}</div>`;
+    }
+    if (cur > today) {
+      cols += `<div class="hm-cell hm-future"></div>`;
+    } else {
+      const k = key(cur), has = k in byDate, s = has ? byDate[k] : null;
+      const title = has ? `${k}　Boost ${s}` : `${k}　記録なし`;
+      const click = has ? ` onclick="showResultFor('${k}')"` : '';
+      cols += `<div class="hm-cell${has ? ' hm-has' : ''}" style="background:${lvColor(s)}" title="${title}"${click}></div>`;
+    }
+    if (cur.getDay() === 6) cols += `</div>`;
+  }
+
+  const wd = ['', '月', '', '水', '', '金', ''];
+  const labelCol = `<div class="hm-col hm-labelcol"><div class="hm-month"></div>${wd.map(w => `<div class="hm-wd">${w}</div>`).join('')}</div>`;
+  host.innerHTML = `<div class="hm-scroll"><div class="hm-cols">${labelCol}${cols}</div></div>`;
+}
 function renderCalendar() {
   const y = calCursor.getFullYear(), m = calCursor.getMonth();
   document.getElementById('cal-title').textContent = `${y}.${String(m + 1).padStart(2, '0')}`;
@@ -2269,8 +2429,9 @@ function exportCSV() {
 
 function clearHistory() {
   if (!confirm('全ての記録を削除しますか？（しずくのレベルもリセットされます）')) return;
-  localStorage.removeItem(REC_KEY);
+  clearAllRecords();                 // メモリ即クリア＋IndexedDB/localStorageも消す
   localStorage.removeItem(MIS_KEY);
+  renderHeatmap();
   renderHistory();
   renderCalendar();
   renderHome();
@@ -2286,7 +2447,7 @@ function showPage(name) {
   document.getElementById('nav-' + name).classList.add('active');
   const bn = document.getElementById('bnav-' + name);
   if (bn) bn.classList.add('active');
-  if (name === 'history') { renderHistory(); renderCalendar(); }
+  if (name === 'history') { renderHeatmap(); renderHistory(); renderCalendar(); }
   if (name === 'settings') { const k = getApiKey(); if (k) document.getElementById('api-key-input').value = k; updateKeyStatus(); }
   window.scrollTo({ top: 0 });
 }
@@ -2320,7 +2481,8 @@ function showToast(msg) {
 }
 
 /* ===== INIT ===== */
-window.onload = () => {
+window.onload = async () => {
+  await initStorage();   // ★ まずIndexedDBから記録を読み込む（移行も実行）
   document.getElementById('inp-date').value = todayStr();
   document.getElementById('empty-shizuku').innerHTML = minamoAva(80);
   renderHome();
