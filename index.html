@@ -1992,7 +1992,7 @@ function loadDemoData() {
   const bubbles = document.getElementById('diary-bubbles');
   const diaryMsgs = ['これはデモ用のサンプルだよ🧪 ほんとうの記録はホームから入力してね！'].concat(shizukuDiary(last, boost, stress, burnout)).slice(0, 4);
   bubbles.innerHTML = diaryMsgs.map(m => `<div class="bubble">${escapeHtml(m)}</div>`).join('');
-  renderCharts(records);
+  setChartMonth(last.date.slice(0, 7));
   burstConfetti(55);
   showToast(newLv > prevLv ? `デモ読込完了！しずくが LV.${newLv} に成長したよ🎉` : 'デモデータを読み込んだよ');
 }
@@ -2045,7 +2045,7 @@ async function analyze() {
     bubbles.innerHTML = `<div class="bubble">${escapeHtml(shizukuDiary(data, boost, stress, burnout))}</div>`;
   }
 
-  renderCharts(records);
+  setChartMonth(data.date.slice(0, 7));
   renderHome();
 
   btn.disabled = false;
@@ -2215,6 +2215,12 @@ function renderResult(data, boost, stress, burnout, records) {
       </div>
     </div>` : ''}
 
+    <div class="cal-head" style="margin:22px 0 4px;">
+      <button class="cal-nav" id="chart-prev" onclick="chartShift(-1)" aria-label="前の月">◀</button>
+      <div class="cal-title" id="chart-month-label">推移グラフ</div>
+      <button class="cal-nav" id="chart-next" onclick="chartShift(1)" aria-label="次の月">▶</button>
+    </div>
+
     <div class="charts-grid">
       <div class="chart-card">
         <div class="chart-title">睡眠時間の推移</div>
@@ -2242,6 +2248,34 @@ function renderResult(data, boost, stress, burnout, records) {
 }
 
 /* ===== CHARTS ===== */
+let chartIdx = null;   // チャートで表示中の月（monthsWithDataのインデックス）
+function setChartMonth(ym) {
+  const months = monthsWithData(getRecords());
+  const i = months.indexOf(ym);
+  chartIdx = i >= 0 ? i : months.length - 1;
+  renderChartsMonth();
+}
+function chartShift(n) {
+  const months = monthsWithData(getRecords());
+  if (!months.length) return;
+  if (chartIdx == null) chartIdx = months.length - 1;
+  chartIdx = Math.max(0, Math.min(months.length - 1, chartIdx + n));
+  renderChartsMonth();
+}
+function renderChartsMonth() {
+  const records = getRecords();
+  const months = monthsWithData(records);
+  const label = document.getElementById('chart-month-label');
+  const prev = document.getElementById('chart-prev');
+  const next = document.getElementById('chart-next');
+  if (!months.length) { if (label) label.textContent = '推移グラフ'; if (prev) prev.disabled = true; if (next) next.disabled = true; renderCharts([]); return; }
+  if (chartIdx == null || chartIdx > months.length - 1) chartIdx = months.length - 1;
+  const ym = months[chartIdx];
+  if (label) label.textContent = `${+ym.slice(0, 4)}年${+ym.slice(5, 7)}月の推移`;
+  if (prev) prev.disabled = chartIdx <= 0;
+  if (next) next.disabled = chartIdx >= months.length - 1;
+  renderCharts(records.filter(r => r.date.slice(0, 7) === ym));
+}
 function renderCharts(records) {
   const labels = records.map(r => r.date.slice(5));
   const gridColor = '#eef5fa', tickColor = '#8da2b5';
@@ -2323,7 +2357,7 @@ function showResultFor(dateStr) {
   renderResult(rec, boost, stress, burnout, records);
   const bubbles = document.getElementById('diary-bubbles');
   if (bubbles) bubbles.innerHTML = `<div class="bubble">${escapeHtml(shizukuDiary(rec, boost, stress, burnout))}</div>`;
-  renderCharts(records);
+  setChartMonth(rec.date.slice(0, 7));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 /* ===== 月次レポート ===== */
@@ -2669,7 +2703,7 @@ window.onload = async () => {
     renderResult(last, boost, stress, burnout, records);
     document.getElementById('diary-bubbles').innerHTML =
       `<div class="bubble">これは前回（${last.date}）の記録だよ。今日の分もホームから入力してね😊</div>`;
-    renderCharts(records);
+    setChartMonth(last.date.slice(0, 7));
   }
 };
 </script>
