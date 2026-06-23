@@ -449,6 +449,21 @@
   .insight-ev { font-size: 12.5px; color: var(--ink2); line-height: 1.6; margin-bottom: 6px; }
   .insight-ev:last-child { margin-bottom: 0; }
   .insight-ev .ins-ic { margin-right: 6px; }
+  .conf-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
+  .conf-hi { background: #dcfce7; color: #15803d; }
+  .conf-mid { background: #fef3c7; color: #b45309; }
+  .conf-lo { background: #eef2f6; color: #8da2b5; }
+  .insight-detail { display: block; font-size: 10.5px; color: var(--ink3); margin-top: 2px; }
+  .bestday-box { margin-top: 14px; padding: 13px 15px; background: linear-gradient(135deg, #f0f9ff, #eef2ff); border: 1px solid #dbeafe; border-radius: 14px; }
+  .bestday-h { font-size: 12px; font-weight: 800; color: var(--blue-deep); letter-spacing: .3px; }
+  .bestday-lead { font-size: 12.5px; color: var(--ink2); margin-top: 6px; line-height: 1.6; }
+  .bestday-cmp { display: flex; gap: 10px; margin-top: 11px; }
+  .bestday-pill { flex: 1; text-align: center; border-radius: 11px; padding: 9px 6px; }
+  .bestday-pill.good { background: #e0f2fe; }
+  .bestday-pill.tough { background: #fff7ed; }
+  .bestday-k { font-size: 10px; color: var(--ink3); }
+  .bestday-v { font-size: 19px; font-weight: 800; color: var(--ink); margin-top: 2px; }
+  .bestday-u { font-size: 11px; font-weight: 600; margin-left: 1px; }
   .insight-note { color: var(--ink3); font-size: 11px; line-height: 1.6; }
   .wk-card { grid-column: span 2; }
   .wk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; margin-top: 4px; }
@@ -1766,100 +1781,150 @@ function _pearson(xs,ys){
   return sxy/Math.sqrt(sxx*syy);
 }
 function _sgn(v,dec){ const d=(dec===undefined?1:dec); const s=v.toFixed(d); return v>=0 ? ('+'+s) : s; }
+function _std(a){ const m=_mean(a); return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length); }
+// 効果量（Cohen's d）：2群の平均差を、ばらつきで標準化した指標
+function _cohensD(a,b){
+  const na=a.length, nb=b.length; if(na<2||nb<2) return 0;
+  const va=_std(a)**2, vb=_std(b)**2;
+  const sp=Math.sqrt(((na-1)*va+(nb-1)*vb)/(na+nb-2));
+  return (!sp || !isFinite(sp)) ? 0 : (_mean(a)-_mean(b))/sp;
+}
+// 信頼度：サンプル数 × 効果量／相関の強さ から 高・中・低 を決める
+function _confGroups(n1,n2,d){ const ad=Math.abs(d), nm=Math.min(n1,n2); if(nm>=8&&ad>=0.5) return 'hi'; if(nm>=5&&ad>=0.35) return 'mid'; return 'lo'; }
+function _confCorr(r,n){ const ar=Math.abs(r); if(ar>=0.6&&n>=14) return 'hi'; if(ar>=0.45&&n>=8) return 'mid'; return 'lo'; }
+const _confW = { hi:1.0, mid:0.6, lo:0.3 };
 
-// 記録から「傾向」を抽出して、強い順に上位3つ返す
+// 記録から「傾向」を抽出し、効果量・信頼度つきで返す
 function buildInsights(records){
-  const MIN = 5;
+  const MIN = 7;
   if (records.length < MIN) return { ready:false, need: MIN - records.length };
+  const n = records.length;
   const col = k => records.map(r => parseFloat(r[k]));
-  const cand = [];
+  const mean = _mean;
+  const findings = [];
 
-  // 1) 連続値ドライバー（中央値で分割）→ アウトカムの差
-  const condPairs = [
-    ['sleep','睡眠','時間','focus','集中度','💤'],
-    ['sleep','睡眠','時間','mood','気分','💤'],
-    ['water','水分','L','focus','集中度','💧'],
-    ['water','水分','L','mood','気分','💧']
+  // A) コントロール可能なドライバー(睡眠/水分/運動) → アウトカム(集中/気分)
+  //    ※Boostは睡眠等から計算されるので、循環を避けてアウトカムには使わない
+  const drivers = [
+    { dk:'sleep', dl:'睡眠', du:'時間', ic:'💤', kind:'thr' },
+    { dk:'water', dl:'水分', du:'L',    ic:'💧', kind:'thr' },
+    { dk:'exercise', dl:'運動', du:'分', ic:'🏃', kind:'bin' }
   ];
-  for (const [dk,dl,du,ok,ol,ic] of condPairs){
-    const mid=_median(col(dk));
-    const hi=[], lo=[];
-    records.forEach(r=>{ (parseFloat(r[dk])>=mid?hi:lo).push(parseFloat(r[ok])); });
-    if (hi.length>=2 && lo.length>=2){
-      const diff=_mean(hi)-_mean(lo);
-      if (Math.abs(diff)>=0.7){
-        cand.push({ strength:Math.abs(diff), dkey:[dk,ok].sort().join('|'), icon:ic,
-          msg:`${dl}が${(Math.round(mid*10)/10)}${du}以上の日は、${ol}が平均で ${_sgn(diff)} ${diff>=0?'高め':'低め'}だったよ（${hi.length}日 vs ${lo.length}日）。`,
-          adv: diff>=0
-            ? `${dl}がとれている日ほど${ol}が良いみたいだから、まずは${dk==='sleep'?'夜の睡眠時間':'こまめな水分補給'}を少し意識してみると、調子が安定しやすくなりそうだよ😊`
-            : `${dl}と${ol}は、今の記録だとはっきりした関係は出ていないみたい。ほかの要因も影響してそうだから、気楽にいこうね😊` });
+  const outcomes = [ ['focus','集中度'], ['mood','気分'] ];
+  for (const drv of drivers){
+    for (const [ok,ol] of outcomes){
+      const ov = col(ok);
+      let hi=[], lo=[], splitLabel='';
+      if (drv.kind==='thr'){
+        const mid=_median(col(drv.dk));
+        records.forEach((r,i)=>{ (parseFloat(r[drv.dk])>=mid?hi:lo).push(ov[i]); });
+        splitLabel = `${drv.dl}が${(Math.round(mid*10)/10)}${drv.du}以上の日`;
+      } else {
+        records.forEach((r,i)=>{ (+r.exercise>0?hi:lo).push(ov[i]); });
+        splitLabel = '運動した日';
       }
+      if (hi.length<2 || lo.length<2) continue;
+      const diff = mean(hi)-mean(lo);
+      const d = _cohensD(hi,lo);
+      if (Math.abs(d) < 0.3) continue;               // 効果が小さいものは出さない
+      const conf = _confGroups(hi.length, lo.length, d);
+      findings.push({
+        kind:'group', icon:drv.ic, dk:drv.dk, dl:drv.dl, ok, ol, diff, conf, actionable:true,
+        msg:`${splitLabel}は、${ol}が平均で ${_sgn(diff)} ${diff>=0?'高め':'低め'}（${hi.length}日 vs ${lo.length}日）`,
+        detail:`効果量 d=${Math.abs(d).toFixed(2)}`,
+        score:_confW[conf]*Math.abs(d)*(diff>=0?1.2:1.0)   // 行動で上げられる正の効果を優先
+      });
     }
   }
 
-  // 2) 運動の有無 → 気分・集中
-  for (const [ok,ol] of [['mood','気分'],['focus','集中度']]){
-    const yes=[], no=[];
-    records.forEach(r=>{ (+r.exercise>0?yes:no).push(parseFloat(r[ok])); });
-    if (yes.length>=2 && no.length>=2){
-      const diff=_mean(yes)-_mean(no);
-      if (Math.abs(diff)>=0.7){
-        cand.push({ strength:Math.abs(diff), dkey:['exercise',ok].sort().join('|'), icon:'🏃',
-          msg:`運動した日は、しなかった日より${ol}が平均で ${_sgn(diff)} ${diff>=0?'高い':'低い'}みたい（運動あり${yes.length}日／なし${no.length}日）。`,
-          adv: diff>=0
-            ? `運動した日は${ol}が上がりやすいみたい。気持ちが乗らない時ほど、5分でもいいから体を動かしてみると効くかもしれないね🏃`
-            : `運動と${ol}の関係は今ははっきりしないけど、体を動かすこと自体はいい気分転換になるよ。無理のない範囲でね😊` });
-      }
-    }
+  // B) 相関（主要ペア）
+  const corrPairs = [['sleep','睡眠','focus','集中度'],['sleep','睡眠','mood','気分'],['water','水分','focus','集中度'],['study','作業','focus','集中度'],['exercise','運動','mood','気分']];
+  for (const [ak,al,bk,bl] of corrPairs){
+    const r=_pearson(col(ak),col(bk));
+    if (r===null || Math.abs(r)<0.45) continue;
+    const conf=_confCorr(r,n);
+    findings.push({
+      kind:'corr', icon:'📊', ak, bk, r, conf, actionable:false,
+      msg:`${al}と${bl}には ${r>=0?'プラス':'マイナス'}の相関（r=${_sgn(r,2)}）${Math.abs(r)>=0.6?'＝はっきりした傾向':'＝ゆるやかな傾向'}`,
+      detail:`n=${n}`,
+      score:_confW[conf]*Math.abs(r)*0.9
+    });
   }
 
-  // 3) 直近の傾向（前半 vs 後半）
-  if (records.length>=6){
-    const half=Math.floor(records.length/2);
+  // C) 直近の傾向（前半 vs 後半）
+  if (n>=8){
+    const half=Math.floor(n/2);
     const early=records.slice(0,half), late=records.slice(-half);
-    for (const [k,l,unit,thr] of [['sleep','睡眠','時間',0.5],['mood','気分','',0.7],['focus','集中度','',0.7]]){
-      const diff=_mean(late.map(r=>parseFloat(r[k])))-_mean(early.map(r=>parseFloat(r[k])));
-      if (Math.abs(diff)>=thr){
-        cand.push({ strength:Math.abs(diff), dkey:'trend|'+k, icon: diff>=0?'📈':'📉',
-          msg:`最近は、${l}が記録の前半より平均 ${_sgn(diff)}${unit} ${diff>=0?'上向きだよ':'下向き気味かな'}。`,
-          adv: diff>=0
-            ? `${l}が上向きなのは、今の生活リズムがあなたに合っているサインだよ。この調子を大事にしていこうね📈`
-            : `${l}が少し下がり気味かも。がんばりすぎていないか、いちど立ち止まって、ゆっくり休む日をつくってみてね🌱` });
-      }
+    for (const [k,l,unit,thr] of [['sleep','睡眠','時間',0.4],['mood','気分','',0.6],['focus','集中度','',0.6]]){
+      const e=early.map(r=>parseFloat(r[k])), la=late.map(r=>parseFloat(r[k]));
+      const diff=mean(la)-mean(e);
+      if (Math.abs(diff)<thr) continue;
+      const d=_cohensD(la,e);
+      const conf=_confGroups(la.length,e.length,d);
+      findings.push({
+        kind:'trend', icon: diff>=0?'📈':'📉', k, diff, conf, actionable:false,
+        msg:`${l}は記録の前半より平均 ${_sgn(diff)}${unit} ${diff>=0?'上向き':'下向き'}`,
+        detail:`前半${e.length}日 → 後半${la.length}日`,
+        score:_confW[conf]*Math.min(Math.abs(d),1.2)*0.7
+      });
     }
   }
 
-  // 4) 相関がいちばん強いペアを1つ（データが十分なときだけ）
-  if (records.length>=7){
-    const cp=[['sleep','睡眠','focus','集中度'],['sleep','睡眠','mood','気分'],['water','水分','focus','集中度'],['study','作業時間','mood','気分'],['exercise','運動','mood','気分']];
-    let best=null;
-    for (const [ak,al,bk,bl] of cp){
-      const r=_pearson(col(ak),col(bk));
-      if (r!==null && Math.abs(r)>=0.45 && (!best || Math.abs(r)>Math.abs(best.r))) best={r,al,bl,ak,bk};
-    }
-    if (best){
-      cand.push({ strength:1.0+Math.abs(best.r)*2, dkey:[best.ak,best.bk].sort().join('|'), icon:'📊',
-        msg:`${best.al}と${best.bl}には ${best.r>=0?'プラス':'マイナス'}の関係が見えるよ（相関 ${_sgn(best.r,2)}）。${Math.abs(best.r)>=0.6?'けっこうはっきりした':'ゆるやかな'}傾向だね。`,
-        adv: best.r>=0
-          ? `${best.al}と${best.bl}は連動して動くみたい。${best.bl}を上げたい時は、まず${best.al}を整えるのが近道かもしれないね🌙`
-          : `${best.al}が増えると${best.bl}が下がりやすいみたい。${best.al}が多い日は、意識して休憩をはさんでみてね🌱` });
-    }
-  }
-
-  // 5) ベースライン（必ず作れる・弱め）
-  cand.push({ strength:0.3, dkey:'base', icon:'🧭',
-    msg:`これまで${records.length}日分の平均は、睡眠${_mean(col('sleep')).toFixed(1)}時間・気分${_mean(col('mood')).toFixed(1)}/10・集中${_mean(col('focus')).toFixed(1)}/10だよ。`,
-    adv:`まずは記録を続けることが、自分のリズムを知る第一歩だよ。データがたまるほど、ミナモももっと具体的なアドバイスができるからね😊` });
-
-  // 強い順 → 同じ変数ペアは1つだけ → 上位3つ
-  cand.sort((a,b)=>b.strength-a.strength);
+  // スコア順 → 同じ対象は1つだけ → 上位4つ
+  findings.sort((a,b)=>b.score-a.score);
   const seen=new Set(), items=[];
-  for (const c of cand){
-    if (seen.has(c.dkey)) continue;
-    seen.add(c.dkey); items.push(c);
-    if (items.length>=3) break;
+  for (const f of findings){
+    const key = f.kind==='group' ? 'g|'+f.dk+'|'+f.ok : f.kind==='corr' ? 'c|'+[f.ak,f.bk].sort().join('|') : 't|'+f.k;
+    if (seen.has(key)) continue;
+    seen.add(key); items.push(f);
+    if (items.length>=4) break;
   }
-  return { ready:true, items, advice: (items[0] && items[0].adv) || '', n:records.length };
+
+  // D) 気分がいい日の条件（高気分 vs 低気分で、コントロール可能な要因を比較）
+  let bestDay=null;
+  if (n>=12){
+    const moodCol=col('mood');
+    const idx=[...records.keys()].sort((i,j)=>moodCol[j]-moodCol[i]);
+    const k=Math.max(3,Math.floor(n/3));
+    const top=idx.slice(0,k), bot=idx.slice(-k);
+    let bestF=null;
+    for (const [fk,fl,unit] of [['sleep','睡眠','h'],['water','水分','L'],['exercise','運動','分'],['study','作業','h']]){
+      const g=top.map(i=>parseFloat(records[i][fk])), t=bot.map(i=>parseFloat(records[i][fk]));
+      const d=_cohensD(g,t);
+      if (!bestF || Math.abs(d)>Math.abs(bestF.d)) bestF={fk,fl,unit,d,good:mean(g),tough:mean(t)};
+    }
+    if (bestF && Math.abs(bestF.d)>=0.3) bestDay={ label:bestF.fl, unit:bestF.unit, good:bestF.good, tough:bestF.tough, d:bestF.d, k };
+  }
+
+  const headline = _headlineAdvice(items, records, bestDay);
+  return { ready:true, headline, bestDay, items, n };
+}
+
+// 最優先のアクション可能な発見を、実際の平均値を使って数値で助言にする
+function _headlineAdvice(items, records, bestDay){
+  const mean=_mean;
+  const top = items.find(f=>f.kind==='group'&&f.diff>0) || items.find(f=>f.kind==='group') || items[0];
+  if (top && top.kind==='group'){
+    const dk=top.dk, ol=top.ol, diff=top.diff;
+    const avg=mean(records.map(r=>parseFloat(r[dk])));
+    if (dk==='sleep'){
+      const mid=_median(records.map(r=>parseFloat(r.sleep)));
+      if (diff>0 && avg<mid){ const gap=Math.max(5,Math.round((mid-avg)*60));
+        return `あなたの平均睡眠は${avg.toFixed(1)}時間。睡眠が${(Math.round(mid*10)/10)}時間を超えた日は${ol}が平均${Math.abs(diff).toFixed(1)}ほど高いから、あと${gap}分だけ早く寝ることを意識すると、${ol}が上がりやすくなりそうだよ😊`; }
+      if (diff>0) return `あなたは平均${avg.toFixed(1)}時間しっかり眠れていて、それが${ol}の高さにつながっているみたい。この睡眠リズムを大事にしていこうね😊`;
+    }
+    if (dk==='water'){
+      const mid=_median(records.map(r=>parseFloat(r.water)));
+      if (diff>0 && avg<mid) return `あなたの平均水分は${avg.toFixed(1)}L。水分が${(Math.round(mid*10)/10)}L以上の日は${ol}が平均${Math.abs(diff).toFixed(1)}ほど高いから、こまめに「あと一杯」を意識してみると変わるかも💧`;
+      if (diff>0) return `水分がとれている日は${ol}が高めみたい。今のペースで、こまめな水分補給を続けていこうね💧`;
+    }
+    if (dk==='exercise'){
+      const exDays=records.filter(r=>+r.exercise>0).length;
+      if (diff>0) return `運動した日は${ol}が平均${Math.abs(diff).toFixed(1)}ほど高いみたい。今は${records.length}日中${exDays}日が運動ありだから、週にもう1〜2日、5〜10分でも体を動かすと効きそうだよ🏃`;
+    }
+  }
+  if (bestDay) return `気分がいい日とそうでない日を比べると、いちばん大きく違うのは【${bestDay.label}】みたい。${bestDay.label}を意識することが、調子のいい日を増やす近道かもしれないね😊`;
+  return `まずは記録を続けることが、自分のリズムを知る第一歩だよ。データがたまるほど、もっと具体的なアドバイスができるからね😊`;
 }
 
 // 直近7日間のサマリー（前週比つき）
@@ -2090,20 +2155,31 @@ function renderResult(data, boost, stress, burnout, records) {
   const insight = buildInsights(records);
   let insightCard;
   if (insight.ready) {
+    const confLabel = { hi: '信頼度 高', mid: '信頼度 中', lo: '信頼度 低' };
+    const bestDayBlock = insight.bestDay ? `
+      <div class="bestday-box">
+        <div class="bestday-h">🔑 気分がいい日の条件</div>
+        <div class="bestday-lead">気分が高い日と低い日（各${insight.bestDay.k}日）を比べると、いちばん違うのは <b>${insight.bestDay.label}</b>だったよ。</div>
+        <div class="bestday-cmp">
+          <div class="bestday-pill good"><div class="bestday-k">気分がいい日</div><div class="bestday-v">${insight.bestDay.good.toFixed(1)}<span class="bestday-u">${insight.bestDay.unit}</span></div></div>
+          <div class="bestday-pill tough"><div class="bestday-k">そうでない日</div><div class="bestday-v">${insight.bestDay.tough.toFixed(1)}<span class="bestday-u">${insight.bestDay.unit}</span></div></div>
+        </div>
+      </div>` : '';
     insightCard = `
     <div class="diary-card insight-card">
       <div class="diary-head"><span class="en">INSIGHT</span>ミナモの気づき<span class="insight-sub">分析 → アドバイス</span></div>
       <div class="diary-flex">
         <div class="diary-avatar">${minamoAva(60, 'think')}</div>
         <div class="diary-bubbles">
-          <div class="bubble insight-advice">${escapeHtml(insight.advice)}</div>
+          <div class="bubble insight-advice">${escapeHtml(insight.headline)}</div>
         </div>
       </div>
+      ${bestDayBlock}
       <div class="insight-evidence">
         <div class="insight-ev-label">📊 データから見えたこと</div>
-        ${insight.items.map(i => `<div class="insight-ev"><span class="ins-ic">${i.icon}</span>${escapeHtml(i.msg)}</div>`).join('')}
+        ${insight.items.map(i => `<div class="insight-ev"><span class="ins-ic">${i.icon}</span>${escapeHtml(i.msg)}<span class="conf-badge conf-${i.conf}">${confLabel[i.conf]}</span><span class="insight-detail">${escapeHtml(i.detail)}</span></div>`).join('')}
       </div>
-      <div class="diary-hint insight-note">※ ${insight.n}日分の記録から計算した「傾向」だよ。記録が増えるほどはっきりしてくるし、関係があっても原因とは限らないから、参考にしてね😊</div>
+      <div class="diary-hint insight-note">※ ${insight.n}日分の記録から計算した傾向だよ。「信頼度」はサンプル数と効果量から自動で付けているよ。関係があっても原因とは限らないから、参考程度にね😊</div>
     </div>`;
   } else {
     insightCard = `
